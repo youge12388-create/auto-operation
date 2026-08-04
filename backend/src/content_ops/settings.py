@@ -14,9 +14,9 @@ class Settings(BaseSettings):
     app_env: str = "development"
     app_secret: str = Field(default="development-only-secret", min_length=16)
     database_url: str = "sqlite:///./data/content_ops.db"
-    redis_url: str = "redis://localhost:6379/0"
+    redis_url: str = ""  # deprecated: Postgres LISTEN/NOTIFY replaces Redis for job wake-up
     admin_email: str = "admin@example.com"
-    admin_password: str = "change-me"
+    admin_password: str = "admin"
     cookie_secure: bool = False
     storage_dir: Path = Path("storage")
     job_lease_seconds: int = Field(default=300, gt=0)

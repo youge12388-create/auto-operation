@@ -3,9 +3,11 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 
 from content_ops.api import add_strategy, update_strategy
-from content_ops.models import Job, Strategy, StrategyVersion
+from content_ops.models import Article, Job, ModelConfig, Source, Strategy, StrategyVersion
+from content_ops.providers import FakeProvider
 from content_ops.scheduler import enqueue_due_jobs, schedule_window
 from content_ops.schemas import StrategyCreate
+from content_ops.workflow import run_job
 
 
 def test_schedule_window_supports_manual_hourly_daily():
@@ -17,9 +19,16 @@ def test_schedule_window_supports_manual_hourly_daily():
 
 
 def test_enqueue_due_jobs_is_idempotent(db):
+    source = Source(
+        name="scheduled-source",
+        source_type="manual",
+        url="https://example.com/scheduled",
+        config_json={"title": "Scheduled title", "content": "Scheduled facts"},
+    )
     strategy = Strategy(name="daily", objective="scheduled", schedule="daily", enabled=True)
     manual = Strategy(name="manual", objective="manual", schedule="manual", enabled=True)
-    db.add_all([strategy, manual])
+    model = ModelConfig(provider="fake", name="scheduler-translation-model")
+    db.add_all([source, strategy, manual, model])
     db.commit()
     now = datetime(2026, 7, 27, 8, 30, tzinfo=timezone.utc)
 
@@ -31,6 +40,14 @@ def test_enqueue_due_jobs_is_idempotent(db):
     jobs = db.scalars(select(Job)).all()
     assert len(jobs) == 1
     assert jobs[0].idempotency_key == f"schedule:{strategy.id}:daily:20260727"
+    assert jobs[0].payload_json["mode"] == "automation"
+
+    result = run_job(db, jobs[0].id, FakeProvider())
+    article = db.scalar(select(Article).where(Article.job_id == jobs[0].id))
+
+    assert result.status == "waiting_review"
+    assert article is not None
+    assert article.title == "\u4e2d\u6587\u8bd1\u6587\uff1aScheduled title"
 
 
 def test_strategy_updates_create_immutable_versions(db):

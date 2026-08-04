@@ -118,7 +118,6 @@ BUILTIN_THEME_SPECS = (
 )
 
 
-
 # 微信正文不可靠地支持 style 标签和 class 选择器，内置主题使用标签级内联样式。
 INLINE_STYLE_PRESETS: dict[str, dict[str, str]] = {
     "swiss-blue-grid": {
@@ -196,10 +195,30 @@ INLINE_STYLE_PRESETS: dict[str, dict[str, str]] = {
 }
 
 BUILTIN_THEME_SPECS = BUILTIN_THEME_SPECS + (
-    ThemeSpec(name="Neon Lab", slug="neon-lab", description="Deep blue and fluorescent green for AI product updates.", tokens={"surface":"#101827","text":"#E6EDF7","accent":"#A3E635","muted":"#91A4BD"}, css=".wx-theme-neon-lab{background:#101827;color:#E6EDF7;}"),  # noqa: E501
-    ThemeSpec(name="You Sir Column", slug="you-sir-column", description="A warm editorial column for 游sir brand content.", tokens={"surface":"#FAF9F6","text":"#202124","accent":"#F26B38","muted":"#72757A"}, css=".wx-theme-you-sir-column{background:#FAF9F6;color:#202124;}"),  # noqa: E501
-    ThemeSpec(name="Briefing Paper", slug="briefing-paper", description="A newspaper-like briefing layout for daily AI news.", tokens={"surface":"#F7F5EF","text":"#1D1D1B","accent":"#C53030","muted":"#77736B"}, css=".wx-theme-briefing-paper{background:#F7F5EF;color:#1D1D1B;}"),  # noqa: E501
+    ThemeSpec(
+        name="Neon Lab",
+        slug="neon-lab",
+        description="Deep blue and fluorescent green for AI product updates.",
+        tokens={"surface": "#101827", "text": "#E6EDF7", "accent": "#A3E635", "muted": "#91A4BD"},
+        css=".wx-theme-neon-lab{background:#101827;color:#E6EDF7;}",
+    ),  # noqa: E501
+    ThemeSpec(
+        name="You Sir Column",
+        slug="you-sir-column",
+        description="A warm editorial column for 游sir brand content.",
+        tokens={"surface": "#FAF9F6", "text": "#202124", "accent": "#F26B38", "muted": "#72757A"},
+        css=".wx-theme-you-sir-column{background:#FAF9F6;color:#202124;}",
+    ),  # noqa: E501
+    ThemeSpec(
+        name="Briefing Paper",
+        slug="briefing-paper",
+        description="A newspaper-like briefing layout for daily AI news.",
+        tokens={"surface": "#F7F5EF", "text": "#1D1D1B", "accent": "#C53030", "muted": "#77736B"},
+        css=".wx-theme-briefing-paper{background:#F7F5EF;color:#1D1D1B;}",
+    ),  # noqa: E501
 )
+
+
 def ensure_builtin_themes(db: Session) -> None:
     for spec in BUILTIN_THEME_SPECS:
         theme = db.scalar(select(Theme).where(Theme.slug == spec.slug))
@@ -216,13 +235,46 @@ def ensure_builtin_themes(db: Session) -> None:
             db.flush()
         version = db.scalar(select(ThemeVersion).where(ThemeVersion.theme_id == theme.id, ThemeVersion.version == 1))
         if version is None:
-            db.add(ThemeVersion(theme_id=theme.id, version=1, tokens_json={**spec.tokens, "inline_styles": INLINE_STYLE_PRESETS.get(spec.slug, {})}, css_text=spec.css))  # noqa: E501
+            db.add(
+                ThemeVersion(
+                    theme_id=theme.id,
+                    version=1,
+                    tokens_json={**spec.tokens, "inline_styles": INLINE_STYLE_PRESETS.get(spec.slug, {})},
+                    css_text=spec.css,
+                )
+            )  # noqa: E501
     db.flush()
 
 
 def render_markdown(content_markdown: str) -> str:
     return MarkdownIt("commonmark", {"breaks": True, "html": False}).render(content_markdown)
 
+
+def inline_styles_for_theme(theme: Theme, version: ThemeVersion) -> dict[str, str]:
+    tokens = version.tokens_json or {}
+    preset = tokens.get("inline_styles") or INLINE_STYLE_PRESETS.get(theme.slug)
+    if preset:
+        return preset
+    surface = str(tokens.get("surface") or "#FFFFFF")
+    text = str(tokens.get("text") or "#1F2937")
+    accent = str(tokens.get("accent") or "#2563EB")
+    muted = str(tokens.get("muted") or "#6B7280")
+    return {
+        "article": f"background:{surface};color:{text};font-size:16px;line-height:1.9;padding:28px 22px;",
+        "h1": (
+            f"color:{accent};font-size:26px;line-height:1.35;margin:0 0 24px;"
+            f"padding-bottom:16px;border-bottom:2px solid {accent};"
+        ),
+        "h2": (
+            f"color:{accent};font-size:21px;line-height:1.45;margin:34px 0 12px;"
+            f"padding-left:12px;border-left:4px solid {accent};"
+        ),
+        "h3": f"color:{text};font-size:18px;line-height:1.5;margin:26px 0 10px;",
+        "p": "margin:0 0 18px;",
+        "blockquote": f"margin:22px 0;padding:14px 16px;border-left:4px solid {accent};color:{muted};",
+        "a": f"color:{accent};text-decoration:none;",
+        "img": "display:block;max-width:100%;height:auto;margin:18px auto;",
+    }
 
 def render_with_theme(content_markdown: str, theme: Theme, version: ThemeVersion) -> str:
     body = render_markdown(content_markdown)
@@ -232,7 +284,7 @@ def render_with_theme(content_markdown: str, theme: Theme, version: ThemeVersion
         f'<article data-theme="{theme.slug}" data-theme-version="{version.version}">{body}</article>',
         create_parent=False,
     )
-    inline_styles = (version.tokens_json or {}).get("inline_styles") or INLINE_STYLE_PRESETS.get(theme.slug, {})
+    inline_styles = inline_styles_for_theme(theme, version)
     wrapper.set("style", inline_styles.get("article", ""))
     for tag, style in inline_styles.items():
         if tag == "article":
@@ -241,6 +293,7 @@ def render_with_theme(content_markdown: str, theme: Theme, version: ThemeVersion
             existing = element.get("style", "")
             element.set("style", f"{style}{existing}" if existing else style)
     return html.tostring(wrapper, encoding="unicode", method="html")
+
 
 def render_revision(db: Session, revision: ArticleRevision, theme: Theme) -> RenderedVersion:
     if not theme.enabled:
@@ -268,9 +321,9 @@ def render_revision(db: Session, revision: ArticleRevision, theme: Theme) -> Ren
         )
         db.add(rendered)
         db.flush()
-    elif "<style" in rendered.html or "data-theme=" not in rendered.html:
-        # Refresh renders created by the pre-inline-style renderer without changing
-        # the revision or theme version identity.
+    elif rendered.html != fresh_html:
+        # Refresh cached previews when inline color tokens or the rendering logic changes
+        # without changing the revision or theme version identity.
         rendered.html = fresh_html
         db.flush()
     return rendered

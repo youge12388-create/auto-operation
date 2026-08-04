@@ -1,7 +1,7 @@
 from fastapi import BackgroundTasks
 from sqlalchemy import select
 
-from content_ops.api import add_revision, review_article
+from content_ops.api import add_revision, archive_article, review_article
 from content_ops.models import (
     Article,
     ArticleRevision,
@@ -34,6 +34,24 @@ def test_strategy_config_rejects_core_step_and_invalid_review_rule():
         assert "布尔值" in str(exc)
     else:
         raise AssertionError("review rule type must be validated")
+    configured = validate_strategy_config(
+        {
+            "topic_algorithm": {
+                "instructions": "优先具体用户价值，排除通稿",
+                "max_topics": 6,
+                "weights": {"heat": 10, "timeliness": 20, "reader_value": 50, "strategy_fit": 20},
+            }
+        }
+    )
+    assert configured["topic_algorithm"]["max_topics"] == 6
+    assert configured["topic_algorithm"]["weights"]["reader_value"] == 50
+
+    try:
+        validate_strategy_config({"topic_algorithm": {"max_topics": 0}})
+    except StrategyConfigError as exc:
+        assert "1-8" in str(exc)
+    else:
+        raise AssertionError("topic recommendation count must be validated")
 
 
 def test_workflow_applies_stage_models_skills_and_optional_steps(db):
@@ -124,7 +142,7 @@ def test_edited_revision_is_the_one_sent_to_local_draft_after_approval(db):
 
     revision = add_revision(
         article.id,
-        ArticleRevisionCreate(content_markdown="# 人工修订版本\n\n保留已确认事实。"),
+        ArticleRevisionCreate(title="人工修订标题", content_markdown="# 人工修订版本\n\n保留已确认事实。"),
         reviewer,
         db,
     )
@@ -132,8 +150,11 @@ def test_edited_revision_is_the_one_sent_to_local_draft_after_approval(db):
     draft_step = db.scalar(select(JobStep).where(JobStep.job_id == job.id, JobStep.step_name == "draft"))
     assert render_step is not None and render_step.status == "queued"
     assert draft_step is not None and draft_step.status == "queued"
+    db.refresh(article)
+    assert article.title == "人工修订标题"
+    assert article.status == "waiting_review"
 
-    review_article(
+    review_result = review_article(
         article.id,
         revision.id,
         ReviewCreate(decision="approve"),
@@ -141,6 +162,8 @@ def test_edited_revision_is_the_one_sent_to_local_draft_after_approval(db):
         reviewer,
         db,
     )
+    assert review_result.status == "approved"
+    assert review_result.auto_result == {}
     resumed = run_job(db, job.id, FakeProvider())
     assert resumed.status == "succeeded"
     db.refresh(article)
@@ -149,9 +172,15 @@ def test_edited_revision_is_the_one_sent_to_local_draft_after_approval(db):
     )
     assert latest is not None
     assert latest.id == revision.id
-    assert db.scalar(select(JobStep).where(JobStep.job_id == job.id, JobStep.step_name == "draft")).output_json[
-        "revision_id"
-    ] == revision.id
+    assert (
+        db.scalar(select(JobStep).where(JobStep.job_id == job.id, JobStep.step_name == "draft")).output_json[
+            "revision_id"
+        ]
+        == revision.id
+    )
+    archived = archive_article(article.id, reviewer, db)
+    assert archived.status == "archived"
+
 
 def test_published_khazix_writer_is_the_default_writing_skill(db):
     default_skill = Skill(
@@ -167,5 +196,5 @@ def test_published_khazix_writer_is_the_default_writing_skill(db):
     db.commit()
 
     assert skill_for_stage(db, strategy, "writing") is default_skill
-    assert skill_for_stage(db, strategy, "rewrite") is default_skill
+    assert skill_for_stage(db, strategy, "rewrite") is None
     assert skill_for_stage(db, strategy, "review") is None

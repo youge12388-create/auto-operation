@@ -1,6 +1,7 @@
 import httpx
 import pytest
 
+from content_ops.api import wechat_error_detail
 from content_ops.wechat import WeChatAPIError, WeChatClient
 
 
@@ -42,6 +43,25 @@ def test_wechat_client_rejects_api_error_without_exposing_secret():
 
     assert "secret-test" not in str(error.value)
     assert "40001" in str(error.value)
+
+
+def test_wechat_ip_whitelist_error_has_actionable_recovery():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"errcode": 40164, "errmsg": "invalid ip 116.30.103.251 ipv6 ::ffff:116.30.103.251"},
+            request=request,
+        )
+
+    with WeChatClient("wx-test", "secret-test", transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(WeChatAPIError) as error:
+            client.get_access_token()
+
+    assert error.value.code == 40164
+    detail = wechat_error_detail(error.value)
+    assert "116.30.103.251" in detail
+    assert "IP 白名单" in detail
+    assert "无需重复添加" in detail
 
 
 def test_wechat_client_uploads_material_and_updates_draft():
@@ -99,6 +119,7 @@ def test_wechat_client_rejects_external_style_tags():
             content_html="<style>.x{color:red}</style>",
             thumb_media_id="thumb-1",
         )
+
 
 def test_wechat_client_submits_publish():
     paths: list[str] = []

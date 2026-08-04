@@ -32,5 +32,5 @@ def enqueue_due_jobs(db: Session, now: datetime | None = None) -> list[Job]:
         existing = db.scalar(select(Job).where(Job.idempotency_key == key))
         if existing is not None:
             continue
-        created.append(create_job(db, strategy, key, payload={"mode": "scan"}))
+        created.append(create_job(db, strategy, key, payload={"mode": "automation"}))
     return created

@@ -1,28 +1,73 @@
+"""Postgres LISTEN/NOTIFY based job wake mechanism.  Works without Redis."""
+
 from __future__ import annotations
 
-from redis import Redis
-from redis.exceptions import RedisError
+import select
+from dataclasses import dataclass
+
+import psycopg
 
 from .settings import get_settings
 
-JOB_QUEUE = "content_ops:jobs"
+CHANNEL = "content_ops_jobs"
+LISTEN_CHANNEL = "content_ops_jobs"
 
 
-def redis_client() -> Redis:
-    return Redis.from_url(
-        get_settings().redis_url,
-        decode_responses=True,
-        socket_connect_timeout=0.2,
-        socket_timeout=0.2,
-    )
+def _dsn() -> str:
+    url = get_settings().database_url
+    if url.startswith("sqlite"):
+        return ""
+    # psycopg DSN: postgresql://user:pass@host:port/db
+    fixed = url
+    if fixed.startswith("postgresql+"):
+        fixed = fixed.split("+", 1)[1]
+    return fixed
 
 
-def wake_job(job_id: str) -> bool:
-    client = redis_client()
-    try:
-        client.rpush(JOB_QUEUE, job_id)
-        return True
-    except RedisError:
-        return False
-    finally:
-        client.close()
+def notify_wake() -> None:
+    """Send NOTIFY on the job channel from any connection (API side)."""
+    dsn = _dsn()
+    if not dsn:
+        return  # sqlite — no NOTIFY support
+    with psycopg.connect(dsn) as conn:
+        conn.execute("NOTIFY content_ops_jobs")
+        conn.commit()
+
+
+@dataclass
+class Listener:
+    """Holds an open Postgres connection for LISTEN + select() polling."""
+
+    _conn: "psycopg.Connection"
+    _channel: str
+
+    def wait(self, timeout: float = 2.0) -> bool:
+        """Block until a NOTIFY arrives or timeout expires. Returns True on notify."""
+        try:
+            conn = self._conn
+            # psycopg 3 uses a non-blocking socket internally
+            if select.select([conn.fileno()], [], [], timeout) == ([], [], []):
+                return False
+            conn.poll()
+            while conn.notifies:
+                conn.notifies.pop(0)
+            return True
+        except (OSError, psycopg.Error) as exc:
+            # connection error, caller should reconnect
+            raise ConnectionError(f"Listener connection lost: {exc}") from exc
+
+    def close(self) -> None:
+        try:
+            self._conn.close()
+        except Exception:
+            pass
+
+
+def create_listener() -> Listener | None:
+    """Create a dedicated LISTEN connection for the worker loop."""
+    dsn = _dsn()
+    if not dsn:
+        return None  # sqlite — no listener
+    conn = psycopg.connect(dsn, autocommit=True)
+    conn.execute(f"LISTEN {LISTEN_CHANNEL}")
+    return Listener(_conn=conn, _channel=LISTEN_CHANNEL)

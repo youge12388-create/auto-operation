@@ -33,6 +33,7 @@ def test_channel_credentials_are_encrypted_and_redacted(db):
     assert "secret-value" not in str(created.model_dump())
     assert list_channel_accounts(None, db)[0].id == created.id
 
+
 def test_environment_channel_is_listed_without_exposing_credentials(db, monkeypatch):
     monkeypatch.setattr(
         "content_ops.api.get_settings",
@@ -62,6 +63,7 @@ def test_channel_routes_and_draft_payload_keep_account_scope():
 
     payload = WechatDraftCreate(channel_account_id="channel-1", thumb_media_id="thumb-1")
     assert payload.channel_account_id == "channel-1"
+
 
 def test_bound_channel_draft_is_idempotent_without_exposing_credentials(db, monkeypatch):
     source = Source(
@@ -108,6 +110,8 @@ def test_bound_channel_draft_is_idempotent_without_exposing_credentials(db, monk
     assert calls == [article.title]
     assert list_publications(None, db)[0].id == first.id
     assert db.query(ChannelAccount).one().encrypted_credentials != "bound-secret"
+
+
 def test_draft_uses_selected_theme_without_changing_revision(monkeypatch, db):
     strategy = Strategy(name="主题草稿策略", objective="验证草稿排版")
     db.add(strategy)
@@ -132,6 +136,7 @@ def test_draft_uses_selected_theme_without_changing_revision(monkeypatch, db):
         db,
     )
     from content_ops.themes import ensure_builtin_themes
+
     ensure_builtin_themes(db)
     theme = db.query(Theme).filter(Theme.slug == "swiss-blue-grid").one()
     db.commit()

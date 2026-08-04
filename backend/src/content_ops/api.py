@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
+import re
 import time
 from datetime import datetime, timezone
+from uuid import uuid4
 
 from fastapi import (
     BackgroundTasks,
@@ -19,6 +22,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from markdown_it import MarkdownIt
 from sqlalchemy import func, select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from .db import get_db
@@ -45,11 +49,12 @@ from .models import (
     Theme,
     ThemeVersion,
     Topic,
-    TopicScore,
+    TopicAlgorithm,
+    TopicMaterial,
     User,
 )
 from .providers import CompletionRequest, provider_for
-from .queueing import wake_job
+from .queueing import notify_wake
 from .schemas import (
     ArticleRead,
     ArticleRevisionCreate,
@@ -66,6 +71,8 @@ from .schemas import (
     JobEventRead,
     JobRead,
     LoginRequest,
+    ManualMaterialCreate,
+    MaterialBatchTopicCreate,
     MaterialDetailRead,
     MaterialRead,
     MaterialTopicCreate,
@@ -87,14 +94,20 @@ from .schemas import (
     SourceRead,
     StrategyCreate,
     StrategyRead,
+    StrategyRunRequest,
     ThemeCopy,
     ThemeCreate,
     ThemePreviewRead,
     ThemeRead,
     ThemeUpdate,
+    TopicAlgorithmCreate,
+    TopicAlgorithmRead,
+    TopicAlgorithmUpdate,
     TopicCreate,
     TopicDecision,
+    TopicMaterialRead,
     TopicRead,
+    TopicScanRequest,
     TopicScoreRead,
     UserCreate,
     UserRead,
@@ -115,12 +128,33 @@ from .security import (
 )
 from .settings import get_settings
 from .skills import SkillPackageError, validate_skill_package
-from .strategy_config import StrategyConfigError, validate_strategy_config, validate_strategy_references
+from .strategy_combinations import validate_strategy_definition, validate_strategy_definition_references
+from .strategy_config import StrategyConfigError
 from .themes import ensure_builtin_themes, render_revision
+from .topic_algorithms import (
+    ensure_builtin_topic_algorithm,
+    normalize_topic_algorithm,
+    topic_algorithm_snapshot,
+    topic_algorithm_values,
+)
 from .wechat import WeChatAPIError, WeChatClient
 from .workflow import create_job, run_job
 
 app = FastAPI(title="AI 自动内容运营系统", version="0.1.0")
+
+
+def wechat_error_detail(exc: WeChatAPIError) -> str:
+    if exc.code != 40164:
+        return str(exc)
+    match = re.search(r"invalid ip ([0-9.]+)", str(exc))
+    ip = match.group(1) if match else "当前服务器出口 IP"
+    return (
+        f"微信公众号拒绝访问：服务器出口 IP {ip} 未加入白名单。"
+        f"请到微信公众平台「设置与开发 → 基本配置 → IP 白名单」添加 {ip} 后重试。"
+        "错误中的 ::ffff: 地址是同一 IPv4 的映射形式，无需重复添加。"
+    )
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"],
@@ -128,6 +162,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+JOB_PRIORITY_MIGRATION_DETAIL = (
+    "数据库结构尚未升级：缺少 automation_jobs.priority，请先应用 Alembic 迁移 0005_job_priority。"
+)
+
+
+def raise_job_schema_error(exc: OperationalError) -> None:
+    if "automation_jobs.priority" in str(exc):
+        raise HTTPException(status_code=503, detail=JOB_PRIORITY_MIGRATION_DETAIL) from exc
+    raise exc
 
 
 def source_read(source: Source) -> SourceRead:
@@ -201,6 +245,29 @@ def model_read(model: ModelConfig) -> ModelRead:
         config=model.config_json,
         has_api_key=bool(model.encrypted_api_key),
     )
+_TERMINAL_JOB_STATUSES = frozenset({"succeeded", "failed_terminal", "canceled"})
+
+
+def _contains_model_id(value: object, model_id: str) -> bool:
+    if isinstance(value, dict):
+        return any(_contains_model_id(item, model_id) for item in value.values())
+    if isinstance(value, list):
+        return any(_contains_model_id(item, model_id) for item in value)
+    return value == model_id
+
+
+def _model_delete_blockers(db: Session, model_id: str) -> list[str]:
+    blockers = [
+        f"策略「{strategy.name}」"
+        for strategy in db.scalars(select(Strategy)).all()
+        if _contains_model_id(strategy.config_json or {}, model_id)
+    ]
+    blockers.extend(
+        f"运行中的任务 {job.id}"
+        for job in db.scalars(select(Job).where(Job.status.not_in(_TERMINAL_JOB_STATUSES))).all()
+        if _contains_model_id(job.payload_json or {}, model_id)
+    )
+    return blockers
 
 
 def channel_account_read(account: ChannelAccount) -> ChannelAccountRead:
@@ -274,6 +341,33 @@ def topic_read(topic: Topic) -> TopicRead:
             )
             for item in sorted(topic.scores, key=lambda value: value.dimension)
         ],
+        materials=[
+            TopicMaterialRead(
+                source_item_id=link.source_item_id,
+                source_name=link.material.source.name if link.material.source is not None else "Unknown source",
+                title=link.material.title,
+                url=link.material.url,
+                role=link.role,
+                relevance_score=link.relevance_score,
+            )
+            for link in sorted(
+                topic.material_links, key=lambda value: (value.role != "primary", -value.relevance_score)
+            )
+            if link.material is not None
+        ],
+    )
+
+
+def topic_algorithm_read(algorithm: TopicAlgorithm) -> TopicAlgorithmRead:
+    values = topic_algorithm_values(algorithm)
+    return TopicAlgorithmRead(
+        id=algorithm.id,
+        name=algorithm.name,
+        instructions=values["instructions"],
+        max_topics=values["max_topics"],
+        weights=values["weights"],
+        is_builtin=algorithm.is_builtin,
+        enabled=algorithm.enabled,
     )
 
 
@@ -487,6 +581,7 @@ def disable_source_group(
     db.refresh(group)
     return SourceGroupRead.model_validate(group)
 
+
 @app.get("/api/v1/sources", response_model=list[SourceRead])
 def list_sources(_: User = Depends(get_current_user), db: Session = Depends(get_db)) -> list[SourceRead]:
     return [source_read(item) for item in db.scalars(select(Source).order_by(Source.created_at.desc())).all()]
@@ -569,7 +664,11 @@ def collect_source_now(
     if not source:
         raise HTTPException(status_code=404, detail="信息源不存在")
     try:
-        items = collect_source(db, source)
+        translation_model = db.scalar(
+            select(ModelConfig).where(ModelConfig.enabled.is_(True)).order_by(ModelConfig.created_at.desc())
+        )
+        translation_provider = provider_for(translation_model) if translation_model else None
+        items = collect_source(db, source, translation_provider, translation_model)
         db.commit()
     except Exception as exc:
         db.rollback()
@@ -616,9 +715,51 @@ def triage_material(
     if material is None:
         raise HTTPException(status_code=404, detail="Material not found")
     if material.triage_status == "used":
+        if payload.decision == "save":
+            return material_read(material)
         raise HTTPException(status_code=409, detail="A material already used for writing cannot be reopened here")
-    material.triage_status = "ignored" if payload.decision == "ignore" else "inbox"
+    material.triage_status = {
+        "save": "selected",
+        "ignore": "ignored",
+        "reopen": "inbox",
+    }[payload.decision]
     add_audit(db, user, f"material.{payload.decision}", "source_item", material.id)
+    db.commit()
+    db.refresh(material)
+    return material_read(material)
+
+
+@app.post("/api/v1/materials/manual", response_model=MaterialRead)
+def add_manual_material(
+    payload: ManualMaterialCreate,
+    user: User = Depends(require_roles("admin", "operator")),
+    db: Session = Depends(get_db),
+) -> MaterialRead:
+    source = db.scalar(
+        select(Source).where(Source.source_type == "manual", Source.name == payload.source_name.strip())
+    )
+    if source is None:
+        source = Source(
+            name=payload.source_name.strip(),
+            source_type="manual",
+            url="",
+            config_json={},
+        )
+        db.add(source)
+        db.flush()
+    content = payload.content.strip()
+    material = SourceItem(
+        source_id=source.id,
+        title=payload.title.strip(),
+        url="",
+        canonical_url=f"manual://{source.id}/{uuid4()}",
+        content=content,
+        content_hash=hashlib.sha256(content.encode("utf-8")).hexdigest(),
+        status="verified",
+        triage_status="selected",
+    )
+    db.add(material)
+    add_audit(db, user, "material.manual_create", "source_item", material.id, {"source_id": source.id})
     db.commit()
     db.refresh(material)
     return material_read(material)
@@ -651,17 +792,19 @@ def create_topic_from_material(
         source_item_id=material.id,
         title=(payload.title or material.title).strip(),
         status="candidate",
-        score=78,
+        score=0,
         rationale="Created by an operator from a collected material",
     )
     db.add(topic)
     db.flush()
-    for dimension, score, rationale in (
-        ("recency", 80, "Collected material is available for review"),
-        ("source_quality", 80, "Source material passed collection validation"),
-        ("strategy_fit", 75, "Operator selected this material for the strategy"),
-    ):
-        db.add(TopicScore(topic_id=topic.id, dimension=dimension, score=score, rationale=rationale))
+    db.add(
+        TopicMaterial(
+            topic_id=topic.id,
+            source_item_id=material.id,
+            role="primary",
+            relevance_score=100,
+        )
+    )
     material.triage_status = "selected"
     add_audit(
         db,
@@ -670,6 +813,58 @@ def create_topic_from_material(
         "source_item",
         material.id,
         {"topic_id": topic.id, "strategy_id": strategy.id},
+    )
+    db.commit()
+    db.refresh(topic)
+    return topic_read(topic)
+
+
+@app.post("/api/v1/topics/from-materials", response_model=TopicRead)
+def create_topic_from_materials(
+    payload: MaterialBatchTopicCreate,
+    user: User = Depends(require_roles("admin", "operator")),
+    db: Session = Depends(get_db),
+) -> TopicRead:
+    strategy = db.get(Strategy, payload.strategy_id)
+    if strategy is None:
+        raise HTTPException(status_code=404, detail="Content strategy not found")
+    material_ids = list(dict.fromkeys(payload.material_ids))
+    materials_by_id = {
+        item.id: item
+        for item in db.scalars(
+            select(SourceItem).where(SourceItem.id.in_(material_ids), SourceItem.status == "verified")
+        ).all()
+    }
+    if len(materials_by_id) != len(material_ids):
+        raise HTTPException(status_code=409, detail="One or more selected materials are no longer available")
+    materials = [materials_by_id[item_id] for item_id in material_ids]
+    topic = Topic(
+        strategy_id=strategy.id,
+        source_item_id=materials[0].id,
+        title=(payload.title or materials[0].title).strip(),
+        status="candidate",
+        score=0,
+        rationale=f"Created by an operator from {len(materials)} retained materials",
+    )
+    db.add(topic)
+    db.flush()
+    for index, material in enumerate(materials):
+        db.add(
+            TopicMaterial(
+                topic_id=topic.id,
+                source_item_id=material.id,
+                role="primary" if index == 0 else "supporting",
+                relevance_score=100 if index == 0 else 90,
+            )
+        )
+        material.triage_status = "selected"
+    add_audit(
+        db,
+        user,
+        "material.create_topic_batch",
+        "topic",
+        topic.id,
+        {"material_ids": material_ids, "strategy_id": strategy.id},
     )
     db.commit()
     db.refresh(topic)
@@ -688,22 +883,32 @@ def start_topic_writing(
         raise HTTPException(status_code=404, detail="Topic not found")
     if topic.status not in {"accepted", "writing"}:
         raise HTTPException(status_code=409, detail="Accept the topic before starting writing")
-    if not topic.source_item_id:
-        raise HTTPException(status_code=409, detail="The topic has no selected source material")
-    material = db.get(SourceItem, topic.source_item_id)
-    if material is None or material.status != "verified":
-        raise HTTPException(status_code=409, detail="The selected source material is no longer available")
+    materials = [link.material for link in topic.material_links if link.material is not None]
+    if not materials and topic.source_item_id:
+        legacy_material = db.get(SourceItem, topic.source_item_id)
+        materials = [legacy_material] if legacy_material is not None else []
+    if not materials or any(material.status != "verified" for material in materials):
+        raise HTTPException(status_code=409, detail="One or more selected materials are no longer available")
     strategy = db.get(Strategy, topic.strategy_id)
     if strategy is None:
         raise HTTPException(status_code=404, detail="Content strategy not found")
     job = create_job(db, strategy, f"write-topic:{topic.id}", payload={"mode": "write_topic", "topic_id": topic.id})
     topic.status = "writing"
-    material.triage_status = "used"
-    add_audit(db, user, "topic.start_writing", "topic", topic.id, {"job_id": job.id, "source_item_id": material.id})
+    for material in materials:
+        material.triage_status = "used"
+    add_audit(
+        db,
+        user,
+        "topic.start_writing",
+        "topic",
+        topic.id,
+        {"job_id": job.id, "material_ids": [material.id for material in materials]},
+    )
     db.commit()
-    wake_job(job.id)
+    notify_wake()
     background.add_task(_run_background, job.id)
     return job
+
 
 @app.get("/api/v1/strategies", response_model=list[StrategyRead])
 def list_strategies(_: User = Depends(get_current_user), db: Session = Depends(get_db)) -> list[StrategyRead]:
@@ -717,8 +922,8 @@ def add_strategy(
     db: Session = Depends(get_db),
 ) -> StrategyRead:
     try:
-        strategy_config = validate_strategy_config(payload.config)
-        validate_strategy_references(db, strategy_config)
+        strategy_config = validate_strategy_definition(payload.config)
+        validate_strategy_definition_references(db, strategy_config)
     except StrategyConfigError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     strategy = Strategy(
@@ -759,8 +964,8 @@ def update_strategy(
     if not strategy:
         raise HTTPException(status_code=404, detail="内容策略不存在")
     try:
-        strategy_config = validate_strategy_config(payload.config)
-        validate_strategy_references(db, strategy_config)
+        strategy_config = validate_strategy_definition(payload.config)
+        validate_strategy_definition_references(db, strategy_config)
     except StrategyConfigError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     strategy.name = payload.name
@@ -788,10 +993,47 @@ def update_strategy(
     return strategy_read(strategy)
 
 
+@app.post("/api/v1/strategies/{strategy_id}/scan", response_model=JobRead)
+def scan_strategy_for_topics(
+    strategy_id: str,
+    background: BackgroundTasks,
+    payload: TopicScanRequest | None = None,
+    _: User = Depends(require_roles("admin", "operator")),
+    db: Session = Depends(get_db),
+) -> Job:
+    strategy = db.get(Strategy, strategy_id)
+    if strategy is None:
+        raise HTTPException(status_code=404, detail="Content strategy not found")
+    if payload and payload.topic_algorithm_id:
+        algorithm = db.get(TopicAlgorithm, payload.topic_algorithm_id)
+        if algorithm is None or not algorithm.enabled:
+            raise HTTPException(status_code=404, detail="选题算法不存在或已停用")
+    else:
+        algorithm = ensure_builtin_topic_algorithm(db)
+    key = f"scan:{strategy.id}:{datetime.now(timezone.utc).isoformat()}"
+    try:
+        job = create_job(
+            db,
+            strategy,
+            key,
+            payload={"mode": "scan"},
+            execution_config_override={"topic_algorithm": topic_algorithm_values(algorithm)},
+            runtime_snapshot_extra={"topic_algorithm": topic_algorithm_snapshot(algorithm)},
+        )
+    except StrategyConfigError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except OperationalError as exc:
+        raise_job_schema_error(exc)
+    notify_wake()
+    background.add_task(_run_background, job.id)
+    return job
+
+
 @app.post("/api/v1/strategies/{strategy_id}/run", response_model=JobRead)
 def run_strategy(
     strategy_id: str,
     background: BackgroundTasks,
+    payload: StrategyRunRequest | None = None,
     _: User = Depends(require_roles("admin", "operator")),
     db: Session = Depends(get_db),
 ) -> Job:
@@ -799,8 +1041,19 @@ def run_strategy(
     if not strategy:
         raise HTTPException(status_code=404, detail="内容策略不存在")
     key = f"manual:{strategy.id}:{datetime.now(timezone.utc).isoformat()}"
-    job = create_job(db, strategy, key, payload={"mode": "scan"})
-    wake_job(job.id)
+    try:
+        job = create_job(
+            db,
+            strategy,
+            key,
+            payload={"mode": "automation"},
+            combination_id=payload.combination_id if payload else None,
+        )
+    except StrategyConfigError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except OperationalError as exc:
+        raise_job_schema_error(exc)
+    notify_wake()
     background.add_task(_run_background, job.id)
     return job
 
@@ -1046,12 +1299,35 @@ def update_model(
     return model_read(model)
 
 
-@app.delete("/api/v1/models/{model_id}", response_model=ModelRead)
-def disable_model(
+@app.delete("/api/v1/models/{model_id}")
+def delete_model(
     model_id: str,
     user: User = Depends(require_roles("admin", "operator")),
     db: Session = Depends(get_db),
+) -> dict[str, bool]:
+    model = db.get(ModelConfig, model_id)
+    if not model:
+        raise HTTPException(status_code=404, detail="模型不存在")
+    blockers = _model_delete_blockers(db, model_id)
+    if blockers:
+        names = "、".join(blockers[:3])
+        suffix = "等" if len(blockers) > 3 else ""
+        raise HTTPException(
+            status_code=409,
+            detail=f"该模型仍被{names}{suffix}引用。请先替换模型或等待任务结束后再删除。",
+        )
+    db.delete(model)
+    add_audit(db, user, "model.delete", "model", model_id)
+    db.commit()
+    return {"deleted": True}
+
+
+def disable_model(
+    model_id: str,
+    user: User | None,
+    db: Session,
 ) -> ModelRead:
+    """Compatibility helper for legacy callers; browser clients use PUT enabled=false."""
     model = db.get(ModelConfig, model_id)
     if not model:
         raise HTTPException(status_code=404, detail="模型不存在")
@@ -1060,7 +1336,6 @@ def disable_model(
     db.commit()
     db.refresh(model)
     return model_read(model)
-
 
 @app.post("/api/v1/models/{model_id}/test", response_model=ModelTestRead)
 def model_connection_test(
@@ -1076,6 +1351,101 @@ def model_connection_test(
     except Exception as exc:
         return ModelTestRead(ok=False, message=str(exc))
     return ModelTestRead(ok=True, message="模型连接成功")
+
+
+@app.get("/api/v1/topic-algorithms", response_model=list[TopicAlgorithmRead])
+def list_topic_algorithms(
+    _: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[TopicAlgorithmRead]:
+    ensure_builtin_topic_algorithm(db)
+    algorithms = db.scalars(
+        select(TopicAlgorithm).order_by(TopicAlgorithm.is_builtin.desc(), TopicAlgorithm.created_at)
+    ).all()
+    return [topic_algorithm_read(item) for item in algorithms]
+
+
+@app.post("/api/v1/topic-algorithms", response_model=TopicAlgorithmRead)
+def create_topic_algorithm(
+    payload: TopicAlgorithmCreate,
+    user: User = Depends(require_roles("admin", "operator")),
+    db: Session = Depends(get_db),
+) -> TopicAlgorithmRead:
+    if db.scalar(select(TopicAlgorithm).where(TopicAlgorithm.name == payload.name.strip())):
+        raise HTTPException(status_code=409, detail="同名选题算法已存在")
+    try:
+        values = normalize_topic_algorithm(
+            instructions=payload.instructions,
+            max_topics=payload.max_topics,
+            weights=payload.weights,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    algorithm = TopicAlgorithm(
+        name=payload.name.strip(),
+        instructions=values["instructions"],
+        max_topics=values["max_topics"],
+        weights_json=values["weights"],
+    )
+    db.add(algorithm)
+    add_audit(db, user, "topic_algorithm.create", "topic_algorithm", algorithm.id)
+    db.commit()
+    db.refresh(algorithm)
+    return topic_algorithm_read(algorithm)
+
+
+@app.put("/api/v1/topic-algorithms/{algorithm_id}", response_model=TopicAlgorithmRead)
+def update_topic_algorithm(
+    algorithm_id: str,
+    payload: TopicAlgorithmUpdate,
+    user: User = Depends(require_roles("admin", "operator")),
+    db: Session = Depends(get_db),
+) -> TopicAlgorithmRead:
+    algorithm = db.get(TopicAlgorithm, algorithm_id)
+    if algorithm is None:
+        raise HTTPException(status_code=404, detail="选题算法不存在")
+    if algorithm.is_builtin:
+        raise HTTPException(status_code=409, detail="默认推荐算法不可编辑")
+    data = payload.model_dump(exclude_unset=True)
+    name = str(data.get("name", algorithm.name)).strip()
+    if name != algorithm.name and db.scalar(select(TopicAlgorithm).where(TopicAlgorithm.name == name)):
+        raise HTTPException(status_code=409, detail="同名选题算法已存在")
+    try:
+        values = normalize_topic_algorithm(
+            instructions=str(data.get("instructions", algorithm.instructions)),
+            max_topics=int(data.get("max_topics", algorithm.max_topics)),
+            weights=data.get("weights", algorithm.weights_json),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    algorithm.name = name
+    algorithm.instructions = values["instructions"]
+    algorithm.max_topics = values["max_topics"]
+    algorithm.weights_json = values["weights"]
+    if "enabled" in data:
+        algorithm.enabled = bool(data["enabled"])
+    add_audit(db, user, "topic_algorithm.update", "topic_algorithm", algorithm.id)
+    db.commit()
+    db.refresh(algorithm)
+    return topic_algorithm_read(algorithm)
+
+
+@app.delete("/api/v1/topic-algorithms/{algorithm_id}", response_model=TopicAlgorithmRead)
+def delete_topic_algorithm(
+    algorithm_id: str,
+    user: User = Depends(require_roles("admin", "operator")),
+    db: Session = Depends(get_db),
+) -> TopicAlgorithmRead:
+    algorithm = db.get(TopicAlgorithm, algorithm_id)
+    if algorithm is None:
+        raise HTTPException(status_code=404, detail="选题算法不存在")
+    if algorithm.is_builtin:
+        raise HTTPException(status_code=409, detail="默认推荐算法不可删除")
+    result = topic_algorithm_read(algorithm)
+    add_audit(db, user, "topic_algorithm.delete", "topic_algorithm", algorithm.id)
+    db.delete(algorithm)
+    db.commit()
+    return result
 
 
 @app.get("/api/v1/topics", response_model=list[TopicRead])
@@ -1123,10 +1493,14 @@ def decide_topic(
     if not topic:
         raise HTTPException(status_code=404, detail="选题不存在")
     topic.status = {"accept": "accepted", "reject": "rejected", "merge": "merged"}[payload.decision]
-    if topic.source_item_id and payload.decision in {"reject", "merge"}:
-        material = db.get(SourceItem, topic.source_item_id)
-        if material is not None and material.triage_status == "selected":
-            material.triage_status = "inbox"
+    if payload.decision in {"reject", "merge"}:
+        materials = [link.material for link in topic.material_links if link.material is not None]
+        if not materials and topic.source_item_id:
+            legacy_material = db.get(SourceItem, topic.source_item_id)
+            materials = [legacy_material] if legacy_material is not None else []
+        for material in materials:
+            if material.triage_status == "selected":
+                material.triage_status = "inbox"
     if payload.comment:
         topic.rationale = f"{topic.rationale}\n{payload.comment}".strip()
     add_audit(db, user, f"topic.{payload.decision}", "topic", topic.id)
@@ -1199,8 +1573,19 @@ def add_job(
     if not strategy:
         raise HTTPException(status_code=404, detail="内容策略不存在")
     key = payload.idempotency_key or f"manual:{strategy.id}:{datetime.now(timezone.utc).isoformat()}"
-    job = create_job(db, strategy, key, payload={"model_id": payload.model_id} if payload.model_id else {})
-    wake_job(job.id)
+    try:
+        job = create_job(
+            db,
+            strategy,
+            key,
+            payload={"model_id": payload.model_id} if payload.model_id else {},
+            combination_id=payload.combination_id,
+        )
+    except StrategyConfigError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except OperationalError as exc:
+        raise_job_schema_error(exc)
+    notify_wake()
     background.add_task(_run_background, job.id)
     return job
 
@@ -1226,7 +1611,7 @@ def retry_job(
     job.duration_ms = 0
     job.last_error = None
     db.commit()
-    wake_job(job.id)
+    notify_wake()
     background.add_task(_run_background, job.id)
     return job
 
@@ -1266,12 +1651,39 @@ def get_article(article_id: str, _: User = Depends(get_current_user), db: Sessio
     return article_read(article)
 
 
+@app.delete("/api/v1/articles/{article_id}", response_model=ArticleRead)
+def archive_article(
+    article_id: str,
+    user: User = Depends(require_roles("admin", "operator", "reviewer")),
+    db: Session = Depends(get_db),
+) -> ArticleRead:
+    article = db.get(Article, article_id)
+    if article is None:
+        raise HTTPException(status_code=404, detail="文章不存在")
+    if article.status not in {"approved", "drafted", "wechat_draft", "published"}:
+        raise HTTPException(status_code=409, detail="只有成稿库中的文章可以归档")
+    previous_status = article.status
+    article.status = "archived"
+    add_audit(
+        db,
+        user,
+        "article.archive",
+        "article",
+        article.id,
+        {"previous_status": previous_status, "remote_content_preserved": True},
+    )
+    db.commit()
+    db.refresh(article)
+    return article_read(article)
+
+
 @app.get("/api/v1/publications", response_model=list[PublicationRead])
 def list_publications(
     _: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[Publication]:
     return list(db.scalars(select(Publication).order_by(Publication.created_at.desc()).limit(200)).all())
+
 
 @app.post("/api/v1/articles/{article_id}/revisions", response_model=ArticleRevisionRead)
 def add_revision(
@@ -1293,7 +1705,9 @@ def add_revision(
         rendered_html=MarkdownIt("commonmark", {"breaks": True}).render(payload.content_markdown),
         created_by=user.id,
     )
-    article.status = "edited"
+    if payload.title is not None:
+        article.title = payload.title.strip()
+    article.status = "waiting_review"
     db.add(revision)
     db.flush()
     db.add(Review(article_revision_id=revision.id, status="pending", auto_result_json={}))
@@ -1552,6 +1966,7 @@ def _channel_html(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return rendered.html, {"theme_id": theme.id, "theme_version": theme.current_version}
 
+
 @app.post(
     "/api/v1/articles/{article_id}/revisions/{revision_id}/wechat-draft",
     response_model=PublicationRead,
@@ -1625,7 +2040,7 @@ def create_wechat_draft(
         publication.error = str(exc)
         db.commit()
         status_code = 409 if exc.result_unknown else (502 if exc.retryable else 400)
-        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+        raise HTTPException(status_code=status_code, detail=wechat_error_detail(exc)) from exc
     except ValueError as exc:
         publication.status = "failed_terminal"
         publication.error = str(exc)
@@ -1802,7 +2217,10 @@ async def upload_wechat_thumb(
                 material_type="thumb",
             )
     except WeChatAPIError as exc:
-        raise HTTPException(status_code=409 if exc.result_unknown else 502, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=409 if exc.result_unknown else 502,
+            detail=wechat_error_detail(exc),
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return WechatMaterialRead(media_id=result.media_id, url=result.url)
@@ -1949,9 +2367,7 @@ def _poll_wechat_publication(publication_id: str, account_id: str, attempts: int
                     result = client.get_publish_status(publication.remote_id)
             except WeChatAPIError as exc:
                 publication.status = (
-                    "unknown"
-                    if exc.result_unknown
-                    else ("failed_retryable" if exc.retryable else "failed_terminal")
+                    "unknown" if exc.result_unknown else ("failed_retryable" if exc.retryable else "failed_terminal")
                 )
                 publication.error = str(exc)
                 db.commit()
@@ -1986,6 +2402,7 @@ def _poll_wechat_publication(publication_id: str, account_id: str, attempts: int
         db.commit()
     finally:
         db.close()
+
 
 @app.post(
     "/api/v1/articles/{article_id}/revisions/{revision_id}/wechat-publish",
@@ -2072,7 +2489,7 @@ def review_article(
     background: BackgroundTasks,
     user: User = Depends(require_roles("admin", "reviewer")),
     db: Session = Depends(get_db),
-) -> Review:
+) -> ReviewRead:
     article = db.get(Article, article_id)
     revision = db.get(ArticleRevision, revision_id)
     if not article or not revision or revision.article_id != article_id:
@@ -2105,6 +2522,6 @@ def review_article(
     db.commit()
     db.refresh(review)
     if should_resume and job is not None:
-        wake_job(job.id)
+        notify_wake()
         background.add_task(_run_background, job.id)
-    return review
+    return review_read(review)

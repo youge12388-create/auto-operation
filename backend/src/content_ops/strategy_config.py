@@ -11,6 +11,8 @@ OPTIONAL_STEPS = frozenset({"style", "rewrite"})
 MODEL_STAGES = ("writing", "style", "rewrite")
 SKILL_STAGES = ("writing", "style", "rewrite", "review")
 DEFAULT_WRITING_SKILL_NAME = "khazix-writer"
+TOPIC_SCORE_DIMENSIONS = ("heat", "timeliness", "reader_value", "strategy_fit")
+DEFAULT_TOPIC_WEIGHTS = {dimension: 25 for dimension in TOPIC_SCORE_DIMENSIONS}
 
 
 class StrategyConfigError(ValueError):
@@ -32,6 +34,11 @@ def validate_strategy_config(config: dict[str, Any] | None) -> dict[str, Any]:
         raise StrategyConfigError("source_ids 必须是字符串数组")
     normalized["source_ids"] = sorted(set(source_ids))
 
+    translate_foreign_sources = normalized.get("translate_foreign_sources", True)
+    if not isinstance(translate_foreign_sources, bool):
+        raise StrategyConfigError("translate_foreign_sources must be a boolean")
+    normalized["translate_foreign_sources"] = translate_foreign_sources
+
     channel_account_id = normalized.get("channel_account_id")
     if channel_account_id is not None and not isinstance(channel_account_id, str):
         raise StrategyConfigError("channel_account_id 必须是字符串")
@@ -44,8 +51,7 @@ def validate_strategy_config(config: dict[str, Any] | None) -> dict[str, Any]:
 
     model_by_stage = normalized.get("model_by_stage", {})
     if not isinstance(model_by_stage, dict) or any(
-        not isinstance(stage, str) or not isinstance(model_id, str)
-        for stage, model_id in model_by_stage.items()
+        not isinstance(stage, str) or not isinstance(model_id, str) for stage, model_id in model_by_stage.items()
     ):
         raise StrategyConfigError("model_by_stage 必须是阶段到模型 ID 的对象")
     unknown_model_stages = sorted(set(model_by_stage) - set(MODEL_STAGES))
@@ -55,8 +61,7 @@ def validate_strategy_config(config: dict[str, Any] | None) -> dict[str, Any]:
 
     skill_by_stage = normalized.get("skill_by_stage", {})
     if not isinstance(skill_by_stage, dict) or any(
-        not isinstance(stage, str) or not isinstance(skill_id, str)
-        for stage, skill_id in skill_by_stage.items()
+        not isinstance(stage, str) or not isinstance(skill_id, str) for stage, skill_id in skill_by_stage.items()
     ):
         raise StrategyConfigError("skill_by_stage 必须是阶段到 Skill ID 的对象")
     unknown_skill_stages = sorted(set(skill_by_stage) - set(SKILL_STAGES))
@@ -75,6 +80,32 @@ def validate_strategy_config(config: dict[str, Any] | None) -> dict[str, Any]:
     if "human_review_required" in review_rules and not isinstance(review_rules["human_review_required"], bool):
         raise StrategyConfigError("review_rules.human_review_required 必须是布尔值")
     normalized["review_rules"] = {"human_review_required": True, **review_rules}
+
+    topic_algorithm = normalized.get("topic_algorithm", {})
+    if not isinstance(topic_algorithm, dict):
+        raise StrategyConfigError("topic_algorithm 必须是对象")
+    instructions = topic_algorithm.get("instructions", "")
+    if not isinstance(instructions, str) or len(instructions) > 2000:
+        raise StrategyConfigError("topic_algorithm.instructions 必须是不超过 2000 字的字符串")
+    max_topics = topic_algorithm.get("max_topics", 4)
+    if isinstance(max_topics, bool) or not isinstance(max_topics, int) or not 1 <= max_topics <= 8:
+        raise StrategyConfigError("topic_algorithm.max_topics 必须是 1-8 的整数")
+    weights = topic_algorithm.get("weights", DEFAULT_TOPIC_WEIGHTS)
+    if not isinstance(weights, dict) or set(weights) - set(TOPIC_SCORE_DIMENSIONS):
+        raise StrategyConfigError("topic_algorithm.weights 包含不支持的评分维度")
+    normalized_weights: dict[str, float] = {}
+    for dimension in TOPIC_SCORE_DIMENSIONS:
+        value = weights.get(dimension, DEFAULT_TOPIC_WEIGHTS[dimension])
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 <= value <= 100:
+            raise StrategyConfigError(f"topic_algorithm.weights.{dimension} 必须在 0-100 之间")
+        normalized_weights[dimension] = float(value)
+    if sum(normalized_weights.values()) <= 0:
+        raise StrategyConfigError("选题评分权重不能全部为 0")
+    normalized["topic_algorithm"] = {
+        "instructions": instructions.strip(),
+        "max_topics": max_topics,
+        "weights": normalized_weights,
+    }
     return normalized
 
 
@@ -125,8 +156,7 @@ def model_id_for_stage(config: dict[str, Any], stage: str, job_model_id: str | N
     return model_by_stage.get(stage) or config.get("default_model_id") or job_model_id
 
 
-def skill_for_stage(db: Session, strategy: Strategy, stage: str) -> Skill | None:
-    config = strategy.config_json or {}
+def skill_for_stage_config(db: Session, config: dict[str, Any], stage: str) -> Skill | None:
     explicit_id = (config.get("skill_by_stage") or {}).get(stage)
     if explicit_id:
         skill = db.get(Skill, explicit_id)
@@ -139,7 +169,7 @@ def skill_for_stage(db: Session, strategy: Strategy, stage: str) -> Skill | None
         if skill and skill.status == "published" and skill.skill_type == stage:
             return skill
 
-    if stage in {"writing", "style", "rewrite"}:
+    if stage == "writing":
         return db.scalar(
             select(Skill).where(
                 Skill.name == DEFAULT_WRITING_SKILL_NAME,
@@ -147,6 +177,10 @@ def skill_for_stage(db: Session, strategy: Strategy, stage: str) -> Skill | None
             )
         )
     return None
+
+
+def skill_for_stage(db: Session, strategy: Strategy, stage: str) -> Skill | None:
+    return skill_for_stage_config(db, strategy.config_json or {}, stage)
 
 
 def model_snapshot(model: ModelConfig | None, fallback_provider: str) -> dict[str, Any]:

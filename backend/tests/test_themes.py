@@ -47,7 +47,7 @@ def test_builtin_themes_are_seeded_and_rendering_is_idempotent(db):
     db.commit()
 
     assert first.id == second.id
-    assert f"data-theme=\"{themes[0].slug}\"" in first.html
+    assert f'data-theme="{themes[0].slug}"' in first.html
     assert "<script>" not in first.html
     assert "<style" not in first.html
     assert "style=" in first.html
@@ -70,6 +70,7 @@ def test_switching_theme_preserves_revision_and_creates_separate_rendering(db):
     assert revision.content_markdown.startswith("# 标题")
     assert db.query(RenderedVersion).count() == 2
 
+
 def test_theme_api_lists_builtins_and_previews_revision(db):
     article, revision = make_revision(db)
     listed = list_themes(None, db)
@@ -78,7 +79,8 @@ def test_theme_api_lists_builtins_and_previews_revision(db):
 
     assert len(listed) == 6
     assert preview.theme_version == 1
-    assert f"data-theme=\"{listed[0].slug}\"" in preview.html
+    assert f'data-theme="{listed[0].slug}"' in preview.html
+
 
 def test_theme_lifecycle_versions_and_copy(db):
     created = add_theme(
@@ -103,3 +105,21 @@ def test_theme_lifecycle_versions_and_copy(db):
     assert copied.tokens["accent"] == "#654321"
     disabled = disable_theme(created.id, None, db)
     assert disabled.enabled is False
+
+
+def test_custom_theme_tokens_are_inlined_for_wechat_rendering(db):
+    _, revision = make_revision(db)
+    theme = add_theme(
+        ThemeCreate(
+            name="Custom color",
+            slug="custom-color",
+            tokens={"surface": "#112233", "text": "#EEF0F2", "accent": "#FF3366", "muted": "#AABBCC"},
+        ),
+        None,
+        db,
+    )
+
+    rendered = render_revision(db, revision, db.get(Theme, theme.id))
+
+    assert "background:#112233" in rendered.html
+    assert "color:#FF3366" in rendered.html

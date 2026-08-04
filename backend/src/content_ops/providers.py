@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -33,18 +34,39 @@ class FakeProvider:
     """Deterministic provider for tests and the first vertical slice."""
 
     def complete(self, request: CompletionRequest) -> CompletionResponse:
+        if request.user.startswith("MATERIAL_TRANSLATION_JSON"):
+            title = request.user.split("TITLE:", 1)[1].split("\nCONTENT:", 1)[0].strip()
+            content = request.user.split("\nCONTENT:\n", 1)[1].strip()
+            return CompletionResponse(
+                text=json.dumps(
+                    {
+                        "title": f"\u4e2d\u6587\u8bd1\u6587\uff1a{title}",
+                        "content": f"\u4e2d\u6587\u8bd1\u6587\uff1a{content}",
+                    },
+                    ensure_ascii=False,
+                ),
+                input_tokens=80,
+                output_tokens=len(content),
+            )
         if "CURRENT_CONTENT:" in request.user and "END_CURRENT_CONTENT" in request.user:
             text = request.user.split("CURRENT_CONTENT:", 1)[1].split("END_CURRENT_CONTENT", 1)[0].strip()
             return CompletionResponse(text=text, input_tokens=80, output_tokens=len(text))
         title = request.user.splitlines()[0][:80] or "每日 AI 干货"
-        text = (
-            f"# {title}\n\n"
-            "这是一份基于已核验来源生成的草稿。\n\n"
-            "## 发生了什么\n\n"
-            f"当前主题为：{title}。正文仍需人工审核事实、语气和发布范围。\n\n"
-            "## 需要注意\n\n"
-            "本文不新增未在事实包中确认的事实。"
-        )
+        text = f"""# {title}
+
+围绕「{title}」，这篇文章只整理事实包中已经确认的信息，并把它放回读者真正关心的问题里：这件事改变了什么，为什么值得现在关注，以及下一步该如何判断。
+
+## 发生了什么
+
+来源显示，这个主题并不是孤立的新闻点，而是一次值得持续观察的变化。我们先保留可以追溯的事实，再区分已经发生的结果和仍需验证的推断，避免把不确定的信息写成结论。
+
+## 对读者有什么影响
+
+如果你正在跟进相关产品、技术或行业趋势，重点不在于追逐每一个新名词，而在于理解它是否解决了真实问题、需要什么条件，以及现有使用方式会不会因此变化。这也是后续创作时最值得补充的一线观察。
+
+## 还需要关注什么
+
+本文不新增未在事实包中确认的事实。发布前仍需要人工核对来源、语气和适用范围，并补充作者自己的判断或经历，让文章成为一篇完整、可读且负责任的内容。"""
         return CompletionResponse(text=text, input_tokens=80, output_tokens=len(text))
 
 

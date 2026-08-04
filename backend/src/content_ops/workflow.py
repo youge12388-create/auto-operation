@@ -26,19 +26,21 @@ from .models import (
     Strategy,
     Theme,
     Topic,
+    TopicMaterial,
     TopicScore,
 )
 from .providers import CompletionRequest, ModelProvider, provider_for
+from .strategy_combinations import resolve_strategy_definition
 from .strategy_config import (
     StrategyConfigError,
     model_id_for_stage,
     model_snapshot,
-    skill_for_stage,
+    skill_for_stage_config,
     skill_snapshot,
     validate_strategy_config,
-    validate_strategy_references,
 )
 from .themes import render_revision
+from .topic_recommendations import recommend_topics
 
 FIXED_STEPS = (
     "collect",
@@ -56,22 +58,43 @@ FIXED_STEPS = (
 )
 
 
+
 def create_job(
     db: Session,
     strategy: Strategy,
     idempotency_key: str,
     max_attempts: int = 3,
     payload: dict[str, Any] | None = None,
+    combination_id: str | None = None,
+    execution_config_override: dict[str, Any] | None = None,
+    runtime_snapshot_extra: dict[str, Any] | None = None,
 ) -> Job:
     existing = db.scalar(select(Job).where(Job.idempotency_key == idempotency_key))
     if existing:
         return existing
+    resolved = resolve_strategy_definition(db, strategy, idempotency_key, combination_id)
+    execution_config = validate_strategy_config({**resolved.config, **(execution_config_override or {})})
+    job_payload = {
+        **(payload or {}),
+        "resolved_strategy_config": execution_config,
+        "runtime_snapshot": {
+            "strategy": {
+                "id": strategy.id,
+                "version": strategy.version,
+                "name": strategy.name,
+                "automation_level": strategy.automation_level,
+            },
+            "combination": resolved.combination,
+            "execution_config": execution_config,
+            **(runtime_snapshot_extra or {}),
+        },
+    }
     job = Job(
         strategy_id=strategy.id,
         idempotency_key=idempotency_key,
         max_attempts=max_attempts,
         status="queued",
-        payload_json=payload or {},
+        payload_json=job_payload,
     )
     db.add(job)
     db.commit()
@@ -105,6 +128,7 @@ def _job_event(
             payload_json=payload or {},
         )
     )
+
 
 def _run_step(db: Session, job: Job, name: str, fn) -> dict[str, Any]:
     step = _step(db, job, name)
@@ -158,6 +182,7 @@ def _skip_step(db: Session, job: Job, name: str, reason: str) -> dict[str, Any]:
     db.commit()
     return step.output_json
 
+
 def _record_job_duration(job: Job, finished_at: datetime | None = None) -> None:
     if job.started_at is None:
         return
@@ -166,10 +191,11 @@ def _record_job_duration(job: Job, finished_at: datetime | None = None) -> None:
     end = end if end.tzinfo is not None else end.replace(tzinfo=timezone.utc)
     job.duration_ms = max(0, int((end - started).total_seconds() * 1000))
 
-def _article(db: Session, job: Job, strategy: Strategy) -> Article:
+
+def _article(db: Session, job: Job, strategy_version: int) -> Article:
     article = db.scalar(select(Article).where(Article.job_id == job.id))
     if article is None:
-        article = Article(job_id=job.id, strategy_version=strategy.version)
+        article = Article(job_id=job.id, strategy_version=strategy_version)
         db.add(article)
         db.flush()
     return article
@@ -229,6 +255,27 @@ def _complete_with_log(
     db.flush()
     return response.text
 
+
+_NON_ARTICLE_MARKERS = (
+    "这是一份基于已核验来源生成的草稿。",
+    "质检报告",
+    "L1 硬性规则",
+    "L2 风格一致性",
+    "禁用词：",
+    "结构套话",
+)
+
+
+def _require_article_body(content: str, stage: str) -> str:
+    body = content.strip()
+    if len(body) < 300:
+        raise ValueError(f"{stage} 阶段没有生成足够完整的文章正文")
+    marker = next((item for item in _NON_ARTICLE_MARKERS if item in body), None)
+    if marker is not None:
+        raise ValueError(f"{stage} 阶段返回了质检内容（{marker}），不是文章正文")
+    return body
+
+
 def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
     job = db.get(Job, job_id)
     if job is None:
@@ -238,12 +285,34 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
     strategy = db.get(Strategy, job.strategy_id)
     if strategy is None:
         raise ValueError("任务关联的内容策略不存在")
-    try:
-        strategy_config = validate_strategy_config(strategy.config_json)
-        validate_strategy_references(db, strategy_config)
-    except StrategyConfigError as exc:
-        raise ValueError(str(exc)) from exc
-
+    strategy_config = (job.payload_json or {}).get("resolved_strategy_config")
+    if not isinstance(strategy_config, dict):
+        try:
+            resolved = resolve_strategy_definition(db, strategy, job.idempotency_key)
+        except StrategyConfigError as exc:
+            raise ValueError(str(exc)) from exc
+        strategy_config = resolved.config
+        job.payload_json = {
+            **(job.payload_json or {}),
+            "resolved_strategy_config": resolved.config,
+            "runtime_snapshot": {
+                "strategy": {
+                    "id": strategy.id,
+                    "version": strategy.version,
+                    "name": strategy.name,
+                    "automation_level": strategy.automation_level,
+                },
+                "combination": resolved.combination,
+                "execution_config": resolved.config,
+            },
+        }
+        db.commit()
+    job_runtime_snapshot = (job.payload_json or {}).get("runtime_snapshot") or {}
+    strategy_runtime_snapshot = job_runtime_snapshot.get("strategy") or {}
+    snapshot_strategy_version = strategy_runtime_snapshot.get("version")
+    if not isinstance(snapshot_strategy_version, int):
+        snapshot_strategy_version = strategy.version
+    job_model_id = (job.payload_json or {}).get("model_id")
     job_mode = (job.payload_json or {}).get("mode")
     if job_mode == "scan":
         if job.started_at is None:
@@ -262,14 +331,49 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
             if source_ids:
                 source_query = source_query.where(Source.id.in_(source_ids))
             for source in db.scalars(source_query).all():
-                for item in collect_source(db, source):
+                for item in collect_source(
+                    db,
+                    source,
+                    translation_job=job,
+                    translate_foreign_sources=strategy_config.get("translate_foreign_sources", True),
+                ):
                     collected.append(item.id)
             return {"item_ids": collected, "material_count": len(collected)}
 
-        _run_step(db, job, "collect", collect_for_triage)
+        collect_output = _run_step(db, job, "collect", collect_for_triage)
         _run_step(db, job, "normalize", lambda: {"normalized": True})
         _run_step(db, job, "deduplicate", lambda: {"deduplicated": True})
-        for step_name in FIXED_STEPS[3:]:
+        recommendation_model_id = model_id_for_stage(strategy_config, "writing", job_model_id)
+        if not recommendation_model_id:
+            raise ValueError("Topic scanning requires an enabled model in the selected strategy")
+        recommendation_model = db.get(ModelConfig, recommendation_model_id)
+        if recommendation_model is None or not recommendation_model.enabled:
+            raise ValueError("The topic recommendation model is missing or disabled")
+        material_ids = list(dict.fromkeys(collect_output["item_ids"]))
+        materials = db.scalars(
+            select(SourceItem)
+            .where(SourceItem.id.in_(material_ids), SourceItem.status == "verified")
+            .order_by(SourceItem.created_at.desc())
+        ).all()
+
+        def build_recommendations() -> dict[str, Any]:
+            topic_algorithm = strategy_config.get("topic_algorithm", {})
+            maximum_topics = int(topic_algorithm.get("max_topics", 4))
+            topics = recommend_topics(
+                db,
+                job,
+                strategy,
+                materials,
+                provider if recommendation_model.provider == "fake" else provider_for(recommendation_model),
+                recommendation_model,
+                strategy_objective=strategy_runtime_snapshot.get("objective") or strategy.objective,
+                algorithm=topic_algorithm,
+                limit=maximum_topics,
+            )
+            return {"topic_ids": [topic.id for topic in topics], "topic_count": len(topics)}
+
+        topic_output = _run_step(db, job, "topic", build_recommendations)
+        for step_name in FIXED_STEPS[4:]:
             _skip_step(db, job, step_name, "等待运营人员从素材池选择写作依据")
         finished_at = datetime.now(timezone.utc)
         job.status = "waiting_topic"
@@ -278,11 +382,17 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
         job.available_at = None
         job.lease_until = None
         _record_job_duration(job, finished_at)
-        _job_event(db, job, "job_waiting_topic", "topic", "waiting_topic", {"material_count": len(collected)})
+        _job_event(
+            db,
+            job,
+            "job_waiting_topic",
+            "topic",
+            "waiting_topic",
+            {"material_count": len(collected), "topic_count": topic_output["topic_count"]},
+        )
         db.commit()
         db.refresh(job)
         return job
-    job_model_id = (job.payload_json or {}).get("model_id")
 
     def configured_model(stage: str) -> ModelConfig | None:
         model_id = model_id_for_stage(strategy_config, stage, job_model_id)
@@ -296,22 +406,22 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
         return model
 
     stage_models = {stage: configured_model(stage) for stage in ("writing", "style", "rewrite")}
-    article = _article(db, job, strategy)
+    article = _article(db, job, snapshot_strategy_version)
     if not article.model_snapshot:
         writing_model = stage_models["writing"]
         article.model_snapshot = {
             **model_snapshot(writing_model, provider.__class__.__name__),
             "stages": {
-                stage: model_snapshot(model, provider.__class__.__name__)
-                for stage, model in stage_models.items()
+                stage: model_snapshot(model, provider.__class__.__name__) for stage, model in stage_models.items()
             },
         }
     if not article.skill_snapshot:
         skill_objects = {
-            stage: skill_for_stage(db, strategy, stage) for stage in ("writing", "style", "rewrite", "review")
+            stage: skill_for_stage_config(db, strategy_config, stage)
+            for stage in ("writing", "style", "rewrite", "review")
         }
         article.skill_snapshot = {
-            "strategy_version": strategy.version,
+            "strategy_version": snapshot_strategy_version,
             "skill_ids": strategy_config.get("skill_ids", []),
             "skills": strategy_config.get("skills", {}),
             "stages": {stage: skill_snapshot(skill) for stage, skill in skill_objects.items() if skill is not None},
@@ -333,14 +443,16 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
         ]
         article.runtime_snapshot_json = {
             "strategy": {
-                "id": strategy.id,
-                "version": strategy.version,
-                "name": strategy.name,
-                "automation_level": strategy.automation_level,
+                "id": strategy_runtime_snapshot.get("id", strategy.id),
+                "version": snapshot_strategy_version,
+                "name": strategy_runtime_snapshot.get("name", strategy.name),
+                "automation_level": strategy_runtime_snapshot.get("automation_level", strategy.automation_level),
                 "disabled_steps": strategy_config.get("disabled_steps", []),
                 "source_ids": strategy_config.get("source_ids", []),
                 "channel_account_id": strategy_config.get("channel_account_id"),
             },
+            "combination": job_runtime_snapshot.get("combination", {}),
+            "execution_config": strategy_config,
             "model": article.model_snapshot,
             "skills": article.skill_snapshot,
             "sources": source_snapshot,
@@ -368,7 +480,7 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
         return provider_for(model) if model is not None else provider
 
     def skill_instruction(stage: str) -> str:
-        skill = skill_for_stage(db, strategy, stage)
+        skill = skill_for_stage_config(db, strategy_config, stage)
         return f"\n\nSkill 指令（{skill.name} {skill.version}）：\n{skill.prompt}" if skill else ""
 
     def collect() -> dict[str, Any]:
@@ -378,7 +490,12 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
             source_query = source_query.where(Source.id.in_(source_ids))
         sources = db.scalars(source_query).all()
         for source in sources:
-            for item in collect_source(db, source):
+            for item in collect_source(
+                db,
+                source,
+                translation_job=job,
+                translate_foreign_sources=strategy_config.get("translate_foreign_sources", True),
+            ):
                 collected["items"].append(item.id)
         return {"item_ids": collected["items"]}
 
@@ -394,7 +511,12 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
                 raise ValueError("选题不存在或不属于当前策略")
             if topic_record.status not in {"accepted", "writing"}:
                 raise ValueError("选题必须先通过人工确认才能开始创作")
-            item = db.get(SourceItem, topic_record.source_item_id) if topic_record.source_item_id else None
+            linked_items = [link.material for link in topic_record.material_links if link.material is not None]
+            item = (
+                linked_items[0]
+                if linked_items
+                else (db.get(SourceItem, topic_record.source_item_id) if topic_record.source_item_id else None)
+            )
             if item is None or item.status != "verified":
                 raise ValueError("选题关联的素材不可用")
             topic_record.status = "writing"
@@ -403,6 +525,7 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
             return {
                 "topic_id": topic_record.id,
                 "source_item_id": item.id,
+                "source_item_ids": [linked.id for linked in linked_items] if linked_items else [item.id],
                 "title": article.title,
                 "score": topic_record.score,
                 "rationale": topic_record.rationale,
@@ -429,6 +552,14 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
             )
             db.add(topic_record)
             db.flush()
+            db.add(
+                TopicMaterial(
+                    topic_id=topic_record.id,
+                    source_item_id=item.id,
+                    role="primary",
+                    relevance_score=100,
+                )
+            )
             for dimension, score, rationale in (
                 ("recency", 90, "来源内容较新"),
                 ("source_quality", 80, "来源已通过采集校验"),
@@ -443,50 +574,65 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
             "topic_id": topic_record.id,
             "source_item_id": item.id,
             "title": item.title,
+            "source_item_ids": [item.id],
             "score": topic_record.score,
             "rationale": topic_record.rationale,
         }
+
     topic_output = _run_step(db, job, "topic", topic)
     item = db.get(SourceItem, topic_output["source_item_id"])
     if item is None:
         raise ValueError("选题来源不存在")
+    material_ids = topic_output.get("source_item_ids") or [item.id]
+    evidence_by_id = {
+        source_item.id: source_item
+        for source_item in db.scalars(select(SourceItem).where(SourceItem.id.in_(material_ids))).all()
+    }
+    evidence_items = [evidence_by_id[item_id] for item_id in material_ids if item_id in evidence_by_id]
 
     def evidence() -> dict[str, Any]:
         result = {
-            "confirmed_facts": [{"statement": item.content[:1000] or item.title, "source_url": item.url}],
+            "confirmed_facts": [
+                {"statement": source_item.content[:1000] or source_item.title, "source_url": source_item.url}
+                for source_item in evidence_items
+            ],
             "conflicts": [],
             "unknowns": [],
             "inferences": [],
-            "sources": [{"title": item.title, "url": item.url, "verified": True}],
+            "sources": [
+                {"title": source_item.title, "url": source_item.url, "verified": True} for source_item in evidence_items
+            ],
         }
         package = db.scalar(select(EvidencePackage).where(EvidencePackage.article_id == article.id))
         if package is None:
             package = EvidencePackage(article_id=article.id, status="verified", version=1, summary=item.title)
             db.add(package)
             db.flush()
-            source = EvidenceSource(
-                evidence_package_id=package.id,
-                source_item_id=item.id,
-                title=item.title,
-                url=item.url,
-                snapshot_hash=item.content_hash,
-                snapshot_text=item.content[:10000],
-                credibility=0.8,
-            )
-            db.add(source)
-            db.flush()
-            db.add(
-                EvidenceClaim(
+            for source_item in evidence_items:
+                source = EvidenceSource(
                     evidence_package_id=package.id,
-                    source_id=source.id,
-                    claim_type="fact",
-                    statement=item.content[:1000] or item.title,
-                    status="confirmed",
+                    source_item_id=source_item.id,
+                    title=source_item.title,
+                    url=source_item.url,
+                    snapshot_hash=source_item.content_hash,
+                    snapshot_text=source_item.content[:10000],
+                    credibility=0.8,
                 )
-            )
+                db.add(source)
+                db.flush()
+                db.add(
+                    EvidenceClaim(
+                        evidence_package_id=package.id,
+                        source_id=source.id,
+                        claim_type="fact",
+                        statement=source_item.content[:1000] or source_item.title,
+                        status="confirmed",
+                    )
+                )
         article.evidence_json = {**result, "evidence_package_id": package.id}
         db.flush()
         return {**result, "evidence_package_id": package.id}
+
     evidence_output = _run_step(db, job, "evidence", evidence)
     outline_output = _run_step(
         db,
@@ -499,16 +645,19 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
         job,
         "writing",
         lambda: {
-            "content": _complete_with_log(
-                db,
-                job,
-                article,
-                stage_provider("writing"),
+            "content": _require_article_body(
+                _complete_with_log(
+                    db,
+                    job,
+                    article,
+                    stage_provider("writing"),
                 CompletionRequest(
                     system="你是事实优先的内容编辑，只能使用事实包中的信息。" + skill_instruction("writing"),
                     user=f"{article.title}\n{evidence_output}\n{outline_output}",
                 ),
-                "writing",
+                    "writing",
+                ),
+                "写作",
             )
         },
     )
@@ -521,16 +670,19 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
             job,
             "style",
             lambda: {
-                "content": _complete_with_log(
-                    db,
-                    job,
-                    article,
-                    stage_provider("style"),
+                "content": _require_article_body(
+                    _complete_with_log(
+                        db,
+                        job,
+                        article,
+                        stage_provider("style"),
                     CompletionRequest(
                         system="你是负责风格编辑的内容编辑，不能改变事实。" + skill_instruction("style"),
                         user=f"CURRENT_CONTENT:\n{writing_output['content']}\nEND_CURRENT_CONTENT",
                     ),
-                    "style",
+                        "style",
+                    ),
+                    "风格编辑",
                 )
             },
         )
@@ -543,16 +695,19 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
             job,
             "rewrite",
             lambda: {
-                "content": _complete_with_log(
-                    db,
-                    job,
-                    article,
-                    stage_provider("rewrite"),
+                "content": _require_article_body(
+                    _complete_with_log(
+                        db,
+                        job,
+                        article,
+                        stage_provider("rewrite"),
                     CompletionRequest(
                         system="你是负责最终改写的内容编辑，不能增加事实。" + skill_instruction("rewrite"),
                         user=f"CURRENT_CONTENT:\n{style_output['content']}\nEND_CURRENT_CONTENT",
                     ),
-                    "rewrite",
+                        "rewrite",
+                    ),
+                    "最终改写",
                 )
             },
         )

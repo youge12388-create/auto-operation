@@ -16,6 +16,7 @@ class UserCreate(BaseModel):
     password: str = Field(min_length=12, max_length=200)
     role: Literal["admin", "operator", "reviewer"] = "operator"
 
+
 class UserRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -40,6 +41,7 @@ class SourceGroupUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=100)
     description: str | None = Field(default=None, max_length=500)
     enabled: bool | None = None
+
 
 class SourceCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
@@ -76,13 +78,25 @@ class MaterialDetailRead(MaterialRead):
     content: str
 
 
+class ManualMaterialCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=500)
+    content: str = Field(min_length=1, max_length=20000)
+    source_name: str = Field(default="手动录入", min_length=1, max_length=200)
+
+
 class MaterialTopicCreate(BaseModel):
     strategy_id: str
     title: str | None = Field(default=None, max_length=500)
 
 
+class MaterialBatchTopicCreate(BaseModel):
+    strategy_id: str
+    material_ids: list[str] = Field(min_length=1, max_length=12)
+    title: str | None = Field(default=None, max_length=500)
+
+
 class MaterialTriage(BaseModel):
-    decision: Literal["ignore", "reopen"]
+    decision: Literal["save", "ignore", "reopen"]
 
 
 class StrategyCreate(BaseModel):
@@ -99,6 +113,10 @@ class StrategyRead(StrategyCreate):
 
     id: str
     version: int
+
+
+class StrategyRunRequest(BaseModel):
+    combination_id: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class SkillRead(BaseModel):
@@ -127,6 +145,7 @@ class ModelUpdate(BaseModel):
     enabled: bool | None = None
     config: dict[str, Any] | None = None
 
+
 class ModelRead(BaseModel):
     id: str
     provider: str
@@ -141,6 +160,7 @@ class JobCreate(BaseModel):
     strategy_id: str
     idempotency_key: str | None = None
     model_id: str | None = None
+    combination_id: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class JobRead(BaseModel):
@@ -157,6 +177,7 @@ class JobRead(BaseModel):
     started_at: datetime | None = None
     completed_at: datetime | None = None
     duration_ms: int
+    runtime_snapshot: dict[str, Any] = Field(default_factory=dict)
     idempotency_key: str
     last_error: str | None
     created_at: datetime | None = None
@@ -165,6 +186,7 @@ class JobRead(BaseModel):
 
 class ArticleRevisionCreate(BaseModel):
     content_markdown: str = Field(min_length=1)
+    title: str | None = Field(default=None, min_length=1, max_length=500)
 
 
 class ArticleRevisionRead(BaseModel):
@@ -203,6 +225,7 @@ class WechatDraftCreate(BaseModel):
 class WechatPublishRequest(BaseModel):
     channel_account_id: str = Field(min_length=1, max_length=100)
 
+
 class PublicationRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -216,6 +239,7 @@ class PublicationRead(BaseModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
+
 class WechatConnectionRead(BaseModel):
     configured: bool
     connected: bool
@@ -225,6 +249,7 @@ class WechatConnectionRead(BaseModel):
 class WechatMaterialRead(BaseModel):
     media_id: str
     url: str | None = None
+
 
 class ReviewCreate(BaseModel):
     decision: Literal["approve", "reject", "request_changes"]
@@ -243,10 +268,12 @@ class ReviewRead(BaseModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
+
 class SourceCollectRead(BaseModel):
     source_id: str
     count: int
     item_ids: list[str]
+
 
 class SkillVersionRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -262,6 +289,8 @@ class SkillVersionRead(BaseModel):
 class ModelTestRead(BaseModel):
     ok: bool
     message: str
+
+
 class ThemeCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     slug: str = Field(min_length=1, max_length=100, pattern="^[a-z0-9-]+$")
@@ -283,6 +312,7 @@ class ThemeCopy(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     slug: str = Field(min_length=1, max_length=100, pattern="^[a-z0-9-]+$")
 
+
 class ThemeRead(BaseModel):
     id: str
     name: str
@@ -298,12 +328,23 @@ class ThemePreviewRead(BaseModel):
     theme: ThemeRead
     theme_version: int
     html: str
+
+
 class TopicScoreRead(BaseModel):
     id: str
     topic_id: str
     dimension: str
     score: float
     rationale: str
+
+
+class TopicMaterialRead(BaseModel):
+    source_item_id: str
+    source_name: str
+    title: str
+    url: str
+    role: str
+    relevance_score: float
 
 
 class TopicRead(BaseModel):
@@ -316,6 +357,7 @@ class TopicRead(BaseModel):
     score: float
     rationale: str
     scores: list[TopicScoreRead]
+    materials: list[TopicMaterialRead]
 
 
 class EvidenceSourceRead(BaseModel):
@@ -364,6 +406,8 @@ class AuditLogRead(BaseModel):
     payload: dict[str, Any]
     ip_address: str | None
     created_at: datetime | None = None
+
+
 class TopicCreate(BaseModel):
     strategy_id: str
     title: str = Field(min_length=1, max_length=500)
@@ -374,6 +418,37 @@ class TopicCreate(BaseModel):
 class TopicDecision(BaseModel):
     decision: Literal["accept", "reject", "merge"]
     comment: str = Field(default="", max_length=2000)
+
+
+class TopicAlgorithmCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    instructions: str = Field(default="", max_length=2000)
+    max_topics: int = Field(default=4, ge=1, le=8)
+    weights: dict[str, float] = Field(default_factory=dict)
+
+
+class TopicAlgorithmUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    instructions: str | None = Field(default=None, max_length=2000)
+    max_topics: int | None = Field(default=None, ge=1, le=8)
+    weights: dict[str, float] | None = None
+    enabled: bool | None = None
+
+
+class TopicAlgorithmRead(BaseModel):
+    id: str
+    name: str
+    instructions: str
+    max_topics: int
+    weights: dict[str, float]
+    is_builtin: bool
+    enabled: bool
+
+
+class TopicScanRequest(BaseModel):
+    topic_algorithm_id: str | None = Field(default=None, min_length=1, max_length=64)
+
+
 class ChannelAccountCreate(BaseModel):
     channel_type: Literal["wechat"] = "wechat"
     name: str = Field(min_length=1, max_length=200)
@@ -390,6 +465,7 @@ class ChannelAccountUpdate(BaseModel):
     enabled: bool | None = None
     config: dict[str, Any] | None = None
 
+
 class ChannelAccountRead(BaseModel):
     id: str
     channel_type: str
@@ -398,6 +474,8 @@ class ChannelAccountRead(BaseModel):
     config: dict[str, Any]
     capabilities: dict[str, Any]
     has_credentials: bool
+
+
 class CalendarItemRead(BaseModel):
     job_id: str
     strategy_id: str

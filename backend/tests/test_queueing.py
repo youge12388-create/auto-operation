@@ -1,16 +1,14 @@
 from content_ops import queueing
 
 
-def test_wake_job_pushes_id_without_failing_request(monkeypatch):
-    calls: list[tuple[str, str]] = []
+def test_notify_wake_sqlite_noop(monkeypatch):
+    """When database_url is sqlite, notify_wake is a safe no-op and doesn't raise."""
+    monkeypatch.setattr(queueing.get_settings(), "database_url", "sqlite:///./test.db")
+    # should not raise
+    queueing.notify_wake()
 
-    class FakeQueue:
-        def rpush(self, key: str, value: str) -> None:
-            calls.append((key, value))
 
-        def close(self) -> None:
-            calls.append(("close", ""))
-
-    monkeypatch.setattr(queueing, "redis_client", lambda: FakeQueue())
-    assert queueing.wake_job("job-1") is True
-    assert calls == [(queueing.JOB_QUEUE, "job-1"), ("close", "")]
+def test_listener_none_on_sqlite(monkeypatch):
+    """create_listener returns None when using SQLite (no LISTEN/NOTIFY)."""
+    monkeypatch.setattr(queueing.get_settings(), "database_url", "sqlite:///./test.db")
+    assert queueing.create_listener() is None

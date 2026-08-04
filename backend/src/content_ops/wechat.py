@@ -10,8 +10,16 @@ from .settings import Settings
 
 
 class WeChatAPIError(RuntimeError):
-    def __init__(self, message: str, *, retryable: bool = False, result_unknown: bool = False) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: int | None = None,
+        retryable: bool = False,
+        result_unknown: bool = False,
+    ) -> None:
         super().__init__(message)
+        self.code = code
         self.retryable = retryable
         self.result_unknown = result_unknown
 
@@ -93,6 +101,7 @@ class WeChatClient:
             errmsg = str(data.get("errmsg") or "未知错误")[:200]
             raise WeChatAPIError(
                 f"微信接口错误 {errcode}：{errmsg}",
+                code=int(errcode),
                 retryable=int(errcode) in {42001, 45009},
             )
         return data

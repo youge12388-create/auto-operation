@@ -42,6 +42,7 @@ class AuditLog(TimestampMixin, Base):
     payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     ip_address: Mapped[str | None] = mapped_column(String(64))
 
+
 class ChannelAccount(TimestampMixin, Base):
     __tablename__ = "channel_accounts"
 
@@ -53,6 +54,7 @@ class ChannelAccount(TimestampMixin, Base):
     config_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     capabilities_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
 
+
 class SourceGroup(TimestampMixin, Base):
     __tablename__ = "source_groups"
 
@@ -62,6 +64,7 @@ class SourceGroup(TimestampMixin, Base):
     enabled: Mapped[bool] = mapped_column(default=True)
 
     sources: Mapped[list["Source"]] = relationship(back_populates="group")
+
 
 class Source(TimestampMixin, Base):
     __tablename__ = "sources"
@@ -164,6 +167,18 @@ class ModelConfig(TimestampMixin, Base):
     config_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
 
 
+class TopicAlgorithm(TimestampMixin, Base):
+    __tablename__ = "topic_algorithms"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    instructions: Mapped[str] = mapped_column(Text, default="")
+    max_topics: Mapped[int] = mapped_column(Integer, default=4)
+    weights_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    is_builtin: Mapped[bool] = mapped_column(default=False)
+    enabled: Mapped[bool] = mapped_column(default=True)
+
+
 class Topic(TimestampMixin, Base):
     __tablename__ = "topics"
 
@@ -178,6 +193,24 @@ class Topic(TimestampMixin, Base):
     duplicate_group: Mapped[str | None] = mapped_column(String(100))
 
     scores: Mapped[list[TopicScore]] = relationship(back_populates="topic", cascade="all, delete-orphan")
+    material_links: Mapped[list[TopicMaterial]] = relationship(
+        back_populates="topic",
+        cascade="all, delete-orphan",
+    )
+
+
+class TopicMaterial(TimestampMixin, Base):
+    __tablename__ = "topic_materials"
+    __table_args__ = (UniqueConstraint("topic_id", "source_item_id", name="uq_topic_material"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    topic_id: Mapped[str] = mapped_column(ForeignKey("topics.id"), index=True)
+    source_item_id: Mapped[str] = mapped_column(ForeignKey("source_items.id"), index=True)
+    role: Mapped[str] = mapped_column(String(32), default="supporting")
+    relevance_score: Mapped[float] = mapped_column(Float, default=0.0)
+
+    topic: Mapped[Topic] = relationship(back_populates="material_links")
+    material: Mapped[SourceItem] = relationship()
 
 
 class TopicScore(TimestampMixin, Base):
@@ -191,6 +224,7 @@ class TopicScore(TimestampMixin, Base):
     rationale: Mapped[str] = mapped_column(Text, default="")
 
     topic: Mapped[Topic] = relationship(back_populates="scores")
+
 
 class ModelCallLog(TimestampMixin, Base):
     __tablename__ = "model_call_logs"
@@ -210,6 +244,7 @@ class ModelCallLog(TimestampMixin, Base):
     output_summary: Mapped[str] = mapped_column(Text, default="")
     error: Mapped[str | None] = mapped_column(Text)
 
+
 class Job(TimestampMixin, Base):
     __tablename__ = "automation_jobs"
     __table_args__ = (UniqueConstraint("idempotency_key", name="uq_job_idempotency"),)
@@ -226,10 +261,15 @@ class Job(TimestampMixin, Base):
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     duration_ms: Mapped[int] = mapped_column(Integer, default=0)
     idempotency_key: Mapped[str] = mapped_column(String(255))
+    priority: Mapped[int] = mapped_column(Integer, default=0, index=True)
     payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     last_error: Mapped[str | None] = mapped_column(Text)
 
     steps: Mapped[list[JobStep]] = relationship(back_populates="job", cascade="all, delete-orphan")
+
+    @property
+    def runtime_snapshot(self) -> dict[str, Any]:
+        return (self.payload_json or {}).get("runtime_snapshot", {})
 
 
 class JobStep(Base):
@@ -259,6 +299,7 @@ class JobEvent(Base):
     status: Mapped[str | None] = mapped_column(String(32))
     payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
 
 class Article(TimestampMixin, Base):
     __tablename__ = "articles"
@@ -315,6 +356,7 @@ class EvidenceClaim(Base):
     status: Mapped[str] = mapped_column(String(32), default="confirmed")
 
     package: Mapped[EvidencePackage] = relationship(back_populates="claims")
+
 
 class ArticleRevision(Base):
     __tablename__ = "article_revisions"
@@ -386,6 +428,7 @@ class RenderedVersion(TimestampMixin, Base):
 
     article_revision: Mapped[ArticleRevision] = relationship(back_populates="rendered_versions")
     theme_version: Mapped[ThemeVersion] = relationship()
+
 
 class Publication(TimestampMixin, Base):
     __tablename__ = "publications"

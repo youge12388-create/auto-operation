@@ -9,7 +9,7 @@ from content_ops.api import (
     list_job_events,
     list_topics,
 )
-from content_ops.models import Article, AuditLog, Source, Strategy
+from content_ops.models import Article, AuditLog, ModelConfig, Source, Strategy
 from content_ops.providers import FakeProvider
 from content_ops.schemas import TopicCreate, TopicDecision
 from content_ops.workflow import create_job, run_job
@@ -23,7 +23,8 @@ def test_topic_evidence_events_and_audit_api(db):
         config_json={"title": "API test", "content": "verified content"},
     )
     strategy = Strategy(name="topic-api", objective="test topics")
-    db.add_all([source, strategy])
+    model = ModelConfig(provider="fake", name="topic-api-translation-model")
+    db.add_all([source, strategy, model])
     db.commit()
     job = create_job(db, strategy, "topic-api-job")
     run_job(db, job.id, FakeProvider())

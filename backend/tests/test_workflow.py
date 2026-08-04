@@ -68,6 +68,7 @@ def test_workflow_creates_draft_and_is_idempotent(db):
     assert result.status == "succeeded"
     assert article.status == "drafted"
 
+
 def test_failed_job_gets_retry_schedule(db):
     strategy = Strategy(name="重试策略", objective="测试任务重试")
     db.add(strategy)

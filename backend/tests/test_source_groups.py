@@ -19,6 +19,7 @@ def test_source_group_update_route_is_registered():
 
     assert "PUT" in route.methods
 
+
 def test_source_read_normalizes_legacy_website_type(db):
     source = Source(
         name="Legacy website",
@@ -66,6 +67,7 @@ def test_source_group_and_source_crud_preserve_group_scope(db):
 
     disabled = disable_source(source.id, None, db)
     assert disabled.enabled is False
+
 
 def test_source_group_can_be_disabled_and_stops_collection(db):
     group = add_source_group(SourceGroupCreate(name="停用分组"), None, db)
