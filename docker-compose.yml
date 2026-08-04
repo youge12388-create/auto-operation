@@ -1,0 +1,77 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: content_ops
+      POSTGRES_USER: content_ops
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-content_ops}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U content_ops -d content_ops"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+    environment:
+      APP_ENV: production
+      APP_SECRET: ${APP_SECRET:?APP_SECRET must be set}
+      DATABASE_URL: postgresql+psycopg://content_ops:${POSTGRES_PASSWORD:-content_ops}@postgres:5432/content_ops
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set}
+      COOKIE_SECURE: "false"
+      STORAGE_DIR: /app/storage
+      WECHAT_APP_ID: ${WECHAT_APP_ID:-}
+      WECHAT_APP_SECRET: ${WECHAT_APP_SECRET:-}
+    ports:
+      - "8000:8000"
+    volumes:
+      - app_storage:/app/storage
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  worker:
+    build:
+      context: ./backend
+    command: ["python", "-m", "content_ops.worker"]
+    stop_grace_period: 35s
+    environment:
+      APP_ENV: production
+      APP_SECRET: ${APP_SECRET:?APP_SECRET must be set}
+      DATABASE_URL: postgresql+psycopg://content_ops:${POSTGRES_PASSWORD:-content_ops}@postgres:5432/content_ops
+      JOB_LEASE_SECONDS: 300
+      WECHAT_APP_ID: ${WECHAT_APP_ID:-}
+      WECHAT_APP_SECRET: ${WECHAT_APP_SECRET:-}
+    volumes:
+      - app_storage:/app/storage
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:80"
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  app_storage:

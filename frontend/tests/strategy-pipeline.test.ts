@@ -1,0 +1,74 @@
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import { api, type StrategyConfig } from "../src/api";
+import { mergeCombinationConfig } from "../src/StrategyPipelinePage";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe("strategy combination contracts", () => {
+  it("keeps inherited stage mappings while applying a combination override", () => {
+    const base: StrategyConfig = {
+      model_by_stage: { style: "style-model" },
+      skill_by_stage: { review: "review-skill" },
+      review_rules: { human_review_required: true },
+    };
+
+    expect(mergeCombinationConfig(base, {
+      model_by_stage: { writing: "writing-model" },
+      skill_by_stage: { writing: "writing-skill" },
+    })).toMatchObject({
+      model_by_stage: { style: "style-model", writing: "writing-model" },
+      skill_by_stage: { review: "review-skill", writing: "writing-skill" },
+      review_rules: { human_review_required: true },
+    });
+  });
+
+  it("sends the selected combination when manually trial-running a pipeline", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: "job-1" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await api.runStrategy("strategy/1", "deep-analysis");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/strategies/strategy/1/run",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ combination_id: "deep-analysis" }),
+      }),
+    );
+  });
+
+  it("lets the backend choose the combination for an automatic run", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: "job-2" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await api.runStrategy("strategy-2");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/strategies/strategy-2/run",
+      expect.objectContaining({ method: "POST", body: undefined }),
+    );
+  });
+  it("archives an article through a recoverable delete contract", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ id: "article-1", status: "archived" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await api.archiveArticle("article-1");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/articles/article-1",
+      expect.objectContaining({ method: "DELETE" }),
+    );
+  });
+});

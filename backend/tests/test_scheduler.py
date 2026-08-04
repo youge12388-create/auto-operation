@@ -1,0 +1,59 @@
+from datetime import datetime, timezone
+
+from sqlalchemy import select
+
+from content_ops.api import add_strategy, update_strategy
+from content_ops.models import Job, Strategy, StrategyVersion
+from content_ops.scheduler import enqueue_due_jobs, schedule_window
+from content_ops.schemas import StrategyCreate
+
+
+def test_schedule_window_supports_manual_hourly_daily():
+    now = datetime(2026, 7, 27, 8, 30, tzinfo=timezone.utc)
+    assert schedule_window("manual", now) is None
+    assert schedule_window("hourly", now) == "hourly:2026072708"
+    assert schedule_window("daily", now) == "daily:20260727"
+    assert schedule_window("unknown", now) is None
+
+
+def test_enqueue_due_jobs_is_idempotent(db):
+    strategy = Strategy(name="daily", objective="scheduled", schedule="daily", enabled=True)
+    manual = Strategy(name="manual", objective="manual", schedule="manual", enabled=True)
+    db.add_all([strategy, manual])
+    db.commit()
+    now = datetime(2026, 7, 27, 8, 30, tzinfo=timezone.utc)
+
+    first = enqueue_due_jobs(db, now)
+    second = enqueue_due_jobs(db, now)
+
+    assert len(first) == 1
+    assert second == []
+    jobs = db.scalars(select(Job)).all()
+    assert len(jobs) == 1
+    assert jobs[0].idempotency_key == f"schedule:{strategy.id}:daily:20260727"
+
+
+def test_strategy_updates_create_immutable_versions(db):
+    first = add_strategy(
+        StrategyCreate(name="versioned", objective="first", schedule="daily"),
+        None,
+        db,
+    )
+    updated = update_strategy(
+        first.id,
+        StrategyCreate(name="versioned", objective="second", schedule="hourly"),
+        None,
+        db,
+    )
+
+    versions = (
+        db.query(StrategyVersion)
+        .filter(StrategyVersion.strategy_id == first.id)
+        .order_by(StrategyVersion.version)
+        .all()
+    )
+    assert updated.version == 2
+    assert [(item.version, item.objective, item.schedule) for item in versions] == [
+        (1, "first", "daily"),
+        (2, "second", "hourly"),
+    ]

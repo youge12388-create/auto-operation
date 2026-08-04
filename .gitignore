@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+backend/.env
+frontend/node_modules/
+frontend/dist/
+.vite/
+data/
+storage/
+*.sqlite3
+.env
+.pnpm-store/
+.runtime/
+*.tsbuildinfo

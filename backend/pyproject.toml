@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "content-ops"
+version = "0.1.0"
+description = "Configurable AI content operations backend"
+requires-python = ">=3.11"
+dependencies = [
+  "alembic>=1.14,<2",
+  "argon2-cffi>=23.1,<24",
+  "cryptography>=42,<45",
+  "fastapi>=0.115,<1",
+  "feedparser>=6,<7",
+  "httpx>=0.27,<1",
+  "lxml>=5,<7",
+  "itsdangerous>=2.2,<3",
+  "markdown-it-py>=3,<4",
+  "psycopg[binary]>=3.2,<4",
+  "pydantic-settings>=2.6,<3",
+  "python-multipart>=0.0.12,<1",
+  "sqlalchemy>=2.0,<3",
+  "trafilatura>=2,<3",
+  "PyYAML>=6,<7",
+  "uvicorn[standard]>=0.32,<1",
+]
+
+[project.optional-dependencies]
+test = [
+  "pytest>=8,<9",
+  "pytest-asyncio>=0.24,<1",
+  "ruff>=0.8,<1",
+]
+
+[project.scripts]
+content-ops = "content_ops.main:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B"]
+ignore = ["B008"]
