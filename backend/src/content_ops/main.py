@@ -1,6 +1,8 @@
 from pathlib import Path
 
 from .db import SessionLocal, init_db
+from .default_resource_seeding import ensure_default_resources
+from .material_categories import ensure_builtin_material_categories
 from .models import User
 from .security import hash_password
 from .settings import get_settings
@@ -15,6 +17,8 @@ def bootstrap() -> None:
         db_path.parent.mkdir(parents=True, exist_ok=True)
     init_db()
     db = SessionLocal()
+    ensure_default_resources(db)
+    ensure_builtin_material_categories(db)
     ensure_builtin_themes(db)
     db.commit()
     try:

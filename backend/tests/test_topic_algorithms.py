@@ -63,9 +63,10 @@ def test_manual_material_is_saved_directly_to_retained_pool(db):
     assert saved.content == "这是手动粘贴的完整素材正文。"
 
 
-def test_quality_report_is_never_accepted_as_article_body():
+def test_quality_report_is_stripped_from_article_body():
     with pytest.raises(ValueError, match="不是文章正文"):
         _require_article_body("## 质检报告\n\nL1 硬性规则\n" + "说明" * 200, "最终改写")
 
-    body = "# 可读文章\n\n" + "这是经过事实核验后形成的完整文章段落。 " * 40
-    assert _require_article_body(body, "最终改写") == body.strip()
+    article = "# 可读文章\n\n" + "这是经过事实核验后形成的完整文章段落。 " * 40
+    report = "\n\n## 质检报告\n\n**L1 硬性规则** ✅"
+    assert _require_article_body(article + report, "最终改写") == article.strip()

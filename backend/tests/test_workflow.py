@@ -1,11 +1,13 @@
 import pytest
 from sqlalchemy import select
 
+from content_ops import workflow
 from content_ops.models import (
     Article,
     ArticleRevision,
     EvidencePackage,
     JobEvent,
+    JobStep,
     ModelCallLog,
     Review,
     Source,
@@ -13,7 +15,28 @@ from content_ops.models import (
     Topic,
 )
 from content_ops.providers import FakeProvider
-from content_ops.workflow import create_job, run_job
+from content_ops.workflow import _parse_quality_review, create_job, run_job
+
+
+def test_quality_review_parser_accepts_model_schema_wrapper():
+    result = _parse_quality_review(
+        '{"response_schema": {"status": "PASS", "score": 91, '
+        + '"summary": "可发布", "checks": {"fact_traceability": true}}}'
+    )
+
+    assert result == {
+        "status": "pass",
+        "score": 91.0,
+        "summary": "可发布",
+        "checks": {"fact_traceability": True},
+    }
+
+
+def test_quality_review_parser_normalizes_common_score_scales():
+    assert _parse_quality_review('{"status":"pass","score":0.8}')["score"] == 80.0
+    assert _parse_quality_review('{"status":"pass","score":8}')["score"] == 80.0
+    assert _parse_quality_review('{"status":"pass","score":80}')["score"] == 80.0
+
 
 
 def test_workflow_creates_draft_and_is_idempotent(db):
@@ -24,6 +47,7 @@ def test_workflow_creates_draft_and_is_idempotent(db):
         config_json={"title": "某 AI 产品更新", "content": "官方公告确认产品已发布。"},
     )
     strategy = Strategy(name="每日 AI 干货", objective="生成普通用户看得懂的 AI 更新文章")
+    strategy.config_json = {"review_rules": {"human_review_required": True}}
     db.add_all([source, strategy])
     db.commit()
 
@@ -49,13 +73,13 @@ def test_workflow_creates_draft_and_is_idempotent(db):
     assert review is not None
     assert review.status == "pending"
     assert revision.content_markdown
-    model_call = db.scalar(select(ModelCallLog).where(ModelCallLog.job_id == job.id))
-    assert model_call is not None
-    assert model_call.stage == "writing"
-    assert model_call.status == "succeeded"
+    model_calls = db.scalars(select(ModelCallLog).where(ModelCallLog.job_id == job.id)).all()
+    assert "writing" in {model_call.stage for model_call in model_calls}
+    assert "review" in {model_call.stage for model_call in model_calls}
+    assert all(model_call.status == "succeeded" for model_call in model_calls)
     topic = db.query(Topic).filter(Topic.job_id == job.id).one()
-    assert topic.status == "accepted"
-    assert len(topic.scores) == 3
+    assert topic.status == "writing"
+    assert len(topic.scores) == 4
     evidence = db.query(EvidencePackage).filter(EvidencePackage.article_id == article.id).one()
     assert evidence.status == "verified"
     assert len(evidence.claims) == 1
@@ -111,3 +135,42 @@ def test_canceled_job_is_not_executed(db):
 
     assert result.status == "canceled"
     assert db.scalar(select(Article).where(Article.job_id == job.id)) is None
+
+def test_collect_isolates_failed_source_and_keeps_job_running(db, monkeypatch):
+    good = Source(
+        name="good",
+        source_type="manual",
+        url="https://example.com/good",
+        config_json={"title": "可用素材", "content": "官方公告确认产品已发布。"},
+    )
+    bad = Source(
+        name="bad",
+        source_type="manual",
+        url="https://example.com/bad",
+        config_json={"title": "失败素材", "content": "这条来源会失败。"},
+    )
+    strategy = Strategy(name="采集隔离", objective="测试单源失败不中断任务")
+    strategy.config_json = {"review_rules": {"human_review_required": True}}
+    db.add_all([good, bad, strategy])
+    db.commit()
+
+    real_collect_source = workflow.collect_source
+
+    def flaky_collect_source(db_session, source, **kwargs):
+        if source.name == "bad":
+            source.last_error = "simulated network failure"
+            db_session.flush()
+            raise ConnectionError("simulated network failure")
+        return real_collect_source(db_session, source, **kwargs)
+
+    monkeypatch.setattr(workflow, "collect_source", flaky_collect_source)
+    job = create_job(db, strategy, "collect-isolation")
+    result = run_job(db, job.id, FakeProvider())
+
+    assert result.status == "waiting_review"
+    step = db.scalar(select(JobStep).where(JobStep.job_id == job.id, JobStep.step_name == "collect"))
+    assert step.status == "succeeded"
+    assert step.output_json["succeeded_sources"] == 1
+    assert "bad" in step.output_json["failed_sources"]
+    assert bad.last_error is not None
+    assert db.scalar(select(Article).where(Article.job_id == job.id)) is not None

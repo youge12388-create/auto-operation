@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     wechat_app_secret: str | None = None
     wechat_api_base_url: str = "https://api.weixin.qq.com"
     wechat_timeout_seconds: float = Field(default=30.0, gt=0, le=120)
+    auto_publish_enabled: bool = False
 
 
 def _resolve_sqlite_url(database_url: str) -> str:
