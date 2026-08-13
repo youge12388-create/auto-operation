@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import re
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -8,7 +10,9 @@ from markdown_it import MarkdownIt
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .delivery import deliver_article
 from .ingestion import collect_source
+from .material_curation import curate_materials
 from .models import (
     Article,
     ArticleRevision,
@@ -25,9 +29,8 @@ from .models import (
     SourceItem,
     Strategy,
     Theme,
+    ThemeVersion,
     Topic,
-    TopicMaterial,
-    TopicScore,
 )
 from .providers import CompletionRequest, ModelProvider, provider_for
 from .strategy_combinations import resolve_strategy_definition
@@ -39,7 +42,7 @@ from .strategy_config import (
     skill_snapshot,
     validate_strategy_config,
 )
-from .themes import render_revision
+from .themes import extract_html, layout_instruction, render_revision, validate_gzh_html
 from .topic_recommendations import recommend_topics
 
 FIXED_STEPS = (
@@ -209,6 +212,13 @@ def _complete_with_log(
     request: CompletionRequest,
     stage: str,
 ) -> str:
+    if stage in {"writing", "style", "rewrite"}:
+        request = CompletionRequest(
+            system=request.system + _GENERATION_GUIDANCE,
+            user=request.user,
+            json_schema=request.json_schema,
+            max_tokens=request.max_tokens,
+        )
     started = time.perf_counter()
     snapshot = article.model_snapshot or {}
     stage_snapshot = (snapshot.get("stages") or {}).get(stage) or snapshot
@@ -256,6 +266,47 @@ def _complete_with_log(
     return response.text
 
 
+def _complete_advisory_with_log(
+    db: Session,
+    job: Job,
+    article: Article,
+    provider: ModelProvider,
+    request: CompletionRequest,
+    stage: str,
+) -> str:
+    try:
+        return _complete_with_log(db, job, article, provider, request, stage)
+    except Exception as exc:
+        _job_event(
+            db,
+            job,
+            "advisory_review_unavailable",
+            stage,
+            "warning",
+            {"reason": str(exc)[:500]},
+        )
+        return json.dumps(
+            {
+                "status": "unavailable",
+                "score": 0,
+                "summary": "AI advisory review was unavailable; delivery continued.",
+                "checks": {},
+            }
+        )
+
+
+def _normalize_score(value: Any) -> float:
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    if 0 < score <= 1:
+        score *= 100
+    elif 1 < score <= 10:
+        score *= 10
+    return max(0.0, min(100.0, score))
+
+
 _NON_ARTICLE_MARKERS = (
     "这是一份基于已核验来源生成的草稿。",
     "质检报告",
@@ -265,6 +316,58 @@ _NON_ARTICLE_MARKERS = (
     "结构套话",
 )
 
+# A writing skill can include an author's personal sign-off as part of its
+# example output. That information belongs to the skill author, not to every
+# article generated in this workspace, so never carry it into a draft.
+_TRAILING_BYLINE_AND_CONTACT = re.compile(
+    r"(?:\n|\A)[ \t>]*[/\uff0f][ \t]*(?:\u4f5c\u8005|author)[\uff1a:][^\n]+"
+    r"(?:\n[ \t>]*(?:[/\uff0f][ \t]*)?(?:(?:\u6295\u7a3f|\u7206\u6599|\u5408\u4f5c|\u5546\u52a1|\u8054\u7cfb).*"
+    r"|(?:\u90ae\u7bb1|email)[\uff1a:].*))*\s*\Z",
+    re.IGNORECASE,
+)
+
+
+def _parse_quality_review(content: str) -> dict[str, Any]:
+    start = content.find("{")
+    end = content.rfind("}")
+    if start < 0 or end <= start:
+        raise ValueError("AI 质量审核没有返回可解析结果")
+    try:
+        payload = json.loads(content[start : end + 1])
+    except json.JSONDecodeError as exc:
+        raise ValueError("AI 质量审核结果不是有效 JSON") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("AI 质量审核结果缺少 pass/fail 状态")
+    # Some OpenAI-compatible models mirror the requested schema in a wrapper.
+    # Accept it only when the direct result does not already declare a status.
+    if "status" not in payload and isinstance(payload.get("response_schema"), dict):
+        payload = payload["response_schema"]
+    status = str(payload.get("status") or "").strip().lower()
+    if status not in {"pass", "fail"}:
+        raise ValueError("AI 质量审核结果缺少 pass/fail 状态")
+    checks = payload.get("checks")
+    if not isinstance(checks, dict):
+        checks = {}
+    return {
+        "status": status,
+        "score": _normalize_score(payload.get("score")),
+        "summary": str(payload.get("summary") or "").strip()[:1000],
+        "checks": checks,
+    }
+
+
+def _parse_advisory_quality_review(content: str) -> dict[str, Any]:
+    try:
+        result = _parse_quality_review(content)
+    except (TypeError, ValueError):
+        return {
+            "status": "unavailable",
+            "score": 0.0,
+            "summary": "AI advisory review was unavailable; delivery continued.",
+            "checks": {},
+        }
+    return {**result, "blocking": False}
+
 
 def _require_article_body(content: str, stage: str) -> str:
     body = content.strip()
@@ -272,8 +375,58 @@ def _require_article_body(content: str, stage: str) -> str:
         raise ValueError(f"{stage} 阶段没有生成足够完整的文章正文")
     marker = next((item for item in _NON_ARTICLE_MARKERS if item in body), None)
     if marker is not None:
-        raise ValueError(f"{stage} 阶段返回了质检内容（{marker}），不是文章正文")
-    return body
+        # Some writing skills (e.g. khazix-writer) instruct the model to append a
+        # self-check report after the article. Keep the article and drop the report.
+        cut = body.find(marker)
+        line_start = body.rfind("\n", 0, cut) + 1
+        body = body[:line_start].rstrip()
+        if len(body) < 300:
+            raise ValueError(f"{stage} 阶段返回了质检内容（{marker}），不是文章正文")
+    return _TRAILING_BYLINE_AND_CONTACT.sub("", body).rstrip()
+
+
+def _ensure_wechat_structure(content: str) -> str:
+    body = content.strip()
+    if len(re.findall(r"(?m)^##\s+\S+", body)) >= 2:
+        return body
+
+    blocks = [block.strip() for block in re.split(r"\n\s*\n", body) if block.strip()]
+    title = ""
+    if blocks and blocks[0].startswith("# ") and not blocks[0].startswith("## "):
+        title = blocks.pop(0)
+    prose = "\n\n".join(blocks)
+    parts = [part.strip() for part in re.split(r"(?<=[???.!?])\s*", prose) if part.strip()]
+    if len(parts) < 3:
+        parts = blocks
+    if len(parts) < 2:
+        return body
+
+    headings = (
+        "????????",
+        "???????",
+        "??????",
+    )
+    chunk_size = max(1, (len(parts) + len(headings) - 1) // len(headings))
+    sections: list[str] = []
+    for index, heading in enumerate(headings):
+        start = index * chunk_size
+        if start >= len(parts):
+            break
+        end = len(parts) if index == len(headings) - 1 else min(len(parts), start + chunk_size)
+        section = " ".join(parts[start:end]).strip()
+        if section:
+            sections.append(f"## {heading}\n\n{section}")
+    if len(sections) < 2:
+        return body
+    return "\n\n".join(([title] if title else []) + sections)
+
+
+_GENERATION_GUIDANCE = (
+    " Produce a WeChat-ready Markdown article with 3-5 meaningful level-2 headings."
+    " Use exact numbers only when they appear in the evidence; otherwise use qualitative wording."
+    " Separate confirmed facts from inference, preserve the title's meaning, and do not invent sources."
+    " Never append an author byline, email address, submission notice, or quality-review report."
+)
 
 
 def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
@@ -350,11 +503,14 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
         if recommendation_model is None or not recommendation_model.enabled:
             raise ValueError("The topic recommendation model is missing or disabled")
         material_ids = list(dict.fromkeys(collect_output["item_ids"]))
-        materials = db.scalars(
-            select(SourceItem)
-            .where(SourceItem.id.in_(material_ids), SourceItem.status == "verified")
-            .order_by(SourceItem.created_at.desc())
-        ).all()
+        material_query = select(SourceItem).where(
+            SourceItem.id.in_(material_ids),
+            SourceItem.status == "verified",
+        )
+        material_category_ids = strategy_config.get("material_category_ids", [])
+        if material_category_ids:
+            material_query = material_query.where(SourceItem.category_id.in_(material_category_ids))
+        materials = db.scalars(material_query.order_by(SourceItem.created_at.desc())).all()
 
         def build_recommendations() -> dict[str, Any]:
             topic_algorithm = strategy_config.get("topic_algorithm", {})
@@ -387,119 +543,23 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
             job,
             "job_waiting_topic",
             "topic",
-            "waiting_topic",
-            {"material_count": len(collected), "topic_count": topic_output["topic_count"]},
-        )
+            "waiting_topic",…1322 tokens truncated… _job_event(
+                    db,
+                    job,
+                    "source_failed",
+                    "collect",
+                    "failed",
+                    {"source": source.name, "error": str(exc)[:500]},
+                )
         db.commit()
-        db.refresh(job)
-        return job
-
-    def configured_model(stage: str) -> ModelConfig | None:
-        model_id = model_id_for_stage(strategy_config, stage, job_model_id)
-        if not model_id:
-            return None
-        model = db.get(ModelConfig, model_id)
-        if model is None:
-            raise ValueError(f"阶段 {stage} 关联的模型不存在")
-        if not model.enabled:
-            raise ValueError(f"阶段 {stage} 关联的模型已停用")
-        return model
-
-    stage_models = {stage: configured_model(stage) for stage in ("writing", "style", "rewrite")}
-    article = _article(db, job, snapshot_strategy_version)
-    if not article.model_snapshot:
-        writing_model = stage_models["writing"]
-        article.model_snapshot = {
-            **model_snapshot(writing_model, provider.__class__.__name__),
-            "stages": {
-                stage: model_snapshot(model, provider.__class__.__name__) for stage, model in stage_models.items()
-            },
+        return {
+            "item_ids": collected_items,
+            "source_count": len(sources),
+            "succeeded_sources": len(sources) - len(source_failures),
+            "failed_sources": source_failures,
         }
-    if not article.skill_snapshot:
-        skill_objects = {
-            stage: skill_for_stage_config(db, strategy_config, stage)
-            for stage in ("writing", "style", "rewrite", "review")
-        }
-        article.skill_snapshot = {
-            "strategy_version": snapshot_strategy_version,
-            "skill_ids": strategy_config.get("skill_ids", []),
-            "skills": strategy_config.get("skills", {}),
-            "stages": {stage: skill_snapshot(skill) for stage, skill in skill_objects.items() if skill is not None},
-        }
-    if not article.runtime_snapshot_json:
-        source_ids = strategy_config.get("source_ids", [])
-        source_query = select(Source).where(Source.enabled.is_(True))
-        if source_ids:
-            source_query = source_query.where(Source.id.in_(source_ids))
-        source_snapshot = [
-            {
-                "id": source.id,
-                "name": source.name,
-                "source_type": source.source_type,
-                "url": source.url,
-                "group_name": source.group_name,
-            }
-            for source in db.scalars(source_query.order_by(Source.id)).all()
-        ]
-        article.runtime_snapshot_json = {
-            "strategy": {
-                "id": strategy_runtime_snapshot.get("id", strategy.id),
-                "version": snapshot_strategy_version,
-                "name": strategy_runtime_snapshot.get("name", strategy.name),
-                "automation_level": strategy_runtime_snapshot.get("automation_level", strategy.automation_level),
-                "disabled_steps": strategy_config.get("disabled_steps", []),
-                "source_ids": strategy_config.get("source_ids", []),
-                "channel_account_id": strategy_config.get("channel_account_id"),
-            },
-            "combination": job_runtime_snapshot.get("combination", {}),
-            "execution_config": strategy_config,
-            "model": article.model_snapshot,
-            "skills": article.skill_snapshot,
-            "sources": source_snapshot,
-            "theme": {
-                "id": strategy_config.get("theme_id"),
-                "version": strategy_config.get("theme_version"),
-            },
-            "review_rules": strategy_config.get("review_rules", {"human_review_required": True}),
-        }
-        job.payload_json = {**(job.payload_json or {}), "runtime_snapshot": article.runtime_snapshot_json}
-    db.flush()
-    if job.started_at is None:
-        job.started_at = datetime.now(timezone.utc)
-    job.completed_at = None
-    job.status = "running"
-    job.available_at = None
-    job.lease_until = None
-    db.commit()
 
-    collected: dict[str, Any] = {"items": []}
-    disabled_steps = set(strategy_config.get("disabled_steps", []))
-
-    def stage_provider(stage: str) -> ModelProvider:
-        model = stage_models.get(stage)
-        return provider_for(model) if model is not None else provider
-
-    def skill_instruction(stage: str) -> str:
-        skill = skill_for_stage_config(db, strategy_config, stage)
-        return f"\n\nSkill 指令（{skill.name} {skill.version}）：\n{skill.prompt}" if skill else ""
-
-    def collect() -> dict[str, Any]:
-        source_query = select(Source).where(Source.enabled.is_(True))
-        source_ids = strategy_config.get("source_ids", [])
-        if source_ids:
-            source_query = source_query.where(Source.id.in_(source_ids))
-        sources = db.scalars(source_query).all()
-        for source in sources:
-            for item in collect_source(
-                db,
-                source,
-                translation_job=job,
-                translate_foreign_sources=strategy_config.get("translate_foreign_sources", True),
-            ):
-                collected["items"].append(item.id)
-        return {"item_ids": collected["items"]}
-
-    _run_step(db, job, "collect", collect)
+    collect_output = _run_step(db, job, "collect", collect)
     _run_step(db, job, "normalize", lambda: {"normalized": True})
     _run_step(db, job, "deduplicate", lambda: {"deduplicated": True})
 
@@ -531,55 +591,92 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
                 "rationale": topic_record.rationale,
             }
 
-        topic_query = select(SourceItem).where(SourceItem.status == "verified")
+        candidate_query = select(SourceItem).where(
+            SourceItem.status == "verified",
+            SourceItem.triage_status.in_(("inbox", "selected")),
+        )
         source_ids = strategy_config.get("source_ids", [])
         if source_ids:
-            topic_query = topic_query.where(SourceItem.source_id.in_(source_ids))
-        item = db.scalar(topic_query.order_by(SourceItem.created_at.desc()))
-        if item is None:
-            raise ValueError("没有可用的已验证来源内容")
-        article.title = item.title
-        topic_record = db.scalar(select(Topic).where(Topic.job_id == job.id))
-        if topic_record is None:
-            topic_record = Topic(
-                strategy_id=strategy.id,
-                job_id=job.id,
-                source_item_id=item.id,
-                title=item.title,
-                status="accepted",
-                score=80,
-                rationale="基于最新已验证来源自动选中",
+            candidate_query = candidate_query.where(SourceItem.source_id.in_(source_ids))
+        material_category_ids = strategy_config.get("material_category_ids", [])
+        if material_category_ids:
+            candidate_query = candidate_query.where(SourceItem.category_id.in_(material_category_ids))
+        collected_ids = list(dict.fromkeys(collect_output.get("item_ids", [])))
+        if collected_ids:
+            candidate_query = candidate_query.where(SourceItem.id.in_(collected_ids))
+        candidates = db.scalars(candidate_query.order_by(SourceItem.created_at.desc()).limit(50)).all()
+        if not candidates and collected_ids:
+            fallback_query = select(SourceItem).where(
+                SourceItem.status == "verified",
+                SourceItem.triage_status.in_(("inbox", "selected")),
             )
-            db.add(topic_record)
-            db.flush()
-            db.add(
-                TopicMaterial(
-                    topic_id=topic_record.id,
-                    source_item_id=item.id,
-                    role="primary",
-                    relevance_score=100,
-                )
-            )
-            for dimension, score, rationale in (
-                ("recency", 90, "来源内容较新"),
-                ("source_quality", 80, "来源已通过采集校验"),
-                ("strategy_fit", 80, "与当前内容策略匹配"),
-            ):
-                db.add(TopicScore(topic_id=topic_record.id, dimension=dimension, score=score, rationale=rationale))
-        else:
-            topic_record.source_item_id = item.id
-            topic_record.title = item.title
+            if source_ids:
+                fallback_query = fallback_query.where(SourceItem.source_id.in_(source_ids))
+            if material_category_ids:
+                fallback_query = fallback_query.where(SourceItem.category_id.in_(material_category_ids))
+            candidates = db.scalars(fallback_query.order_by(SourceItem.created_at.desc()).limit(50)).all()
+        if not candidates:
+            raise ValueError("素材池范围内没有可用于自动创作的素材")
+
+        writing_model = stage_models["writing"]
+        curation = curate_materials(
+            db,
+            job,
+            strategy,
+            candidates,
+            stage_provider("writing"),
+            writing_model,
+            limit=12,
+        )
+        selected_ids = [decision["id"] for decision in curation]
+        if not selected_ids:
+            raise ValueError("AI 精选后没有达到创作标准的素材")
+        selected_by_id = {item.id: item for item in candidates}
+        selected_materials = [selected_by_id[item_id] for item_id in selected_ids if item_id in selected_by_id]
+        algorithm = strategy_config.get("topic_algorithm", {})
+        recommendations = recommend_topics(
+            db,
+            job,
+            strategy,
+            selected_materials,
+            stage_provider("writing"),
+            writing_model,
+            strategy_objective=strategy_runtime_snapshot.get("objective") or strategy.objective,
+            algorithm=algorithm,
+            limit=int(algorithm.get("max_topics", 4)),
+        )
+        topic_record = max(recommendations, key=lambda candidate: candidate.score)
+        for recommendation in recommendations:
+            recommendation.status = "writing" if recommendation.id == topic_record.id else "rejected_auto"
+        linked_items = [link.material for link in topic_record.material_links if link.material is not None]
+        if not linked_items:
+            raise ValueError("AI 选题没有关联可用素材")
+        item = linked_items[0]
+        article.title = topic_record.title
         db.flush()
         return {
             "topic_id": topic_record.id,
             "source_item_id": item.id,
-            "title": item.title,
-            "source_item_ids": [item.id],
+            "title": topic_record.title,
+            "source_item_ids": [linked.id for linked in linked_items],
             "score": topic_record.score,
             "rationale": topic_record.rationale,
+            "selection_mode": "ai_automatic",
         }
 
     topic_output = _run_step(db, job, "topic", topic)
+    runtime_snapshot = dict((job.payload_json or {}).get("runtime_snapshot") or {})
+    if "material_selection" not in runtime_snapshot:
+        runtime_snapshot["material_selection"] = {
+            "category_ids": list(strategy_config.get("material_category_ids", [])),
+            "material_ids": list(topic_output.get("source_item_ids") or [topic_output["source_item_id"]]),
+            "topic_id": topic_output["topic_id"],
+            "topic_title": topic_output["title"],
+            "selection_mode": topic_output.get("selection_mode", "manual"),
+        }
+        job.payload_json = {**(job.payload_json or {}), "runtime_snapshot": runtime_snapshot}
+        article.runtime_snapshot_json = runtime_snapshot
+        db.flush()
     item = db.get(SourceItem, topic_output["source_item_id"])
     if item is None:
         raise ValueError("选题来源不存在")
@@ -711,60 +808,149 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
                 )
             },
         )
-    _run_step(
+    rewrite_output = {
+        **rewrite_output,
+        "content": _ensure_wechat_structure(rewrite_output["content"]),
+    }
+    review_rules = strategy_config.get("review_rules", {})
+    quality_review_output = _run_step(
         db,
         job,
         "review",
-        lambda: {"status": "pass", "checks": {"fact_traceability": True, "source_quality": True}},
+        lambda: _parse_advisory_quality_review(
+            _complete_advisory_with_log(
+                db,
+                job,
+                article,
+                stage_provider("review"),
+                CompletionRequest(
+                    system=(
+                        "你是发布前质量审核员。只根据文章和事实包检查事实可追溯、来源质量、"
+                        "标题与正文一致性、完整性和明显风险。不要重写文章。只返回一个 JSON 对象，"
+                        "根层必须包含 status（仅 pass 或 fail）、score、summary 和 checks；"
+                        "不要返回 response_schema、markdown 或其他包装字段。"
+                        + skill_instruction("review")
+                    ),
+                    user="QUALITY_REVIEW_JSON\n"
+                    + json.dumps(
+                        {
+                            "required_output": {
+                                "status": "pass or fail",
+                                "score": 0,
+                                "summary": "审核结论",
+                                "checks": {
+                                    "fact_traceability": True,
+                                    "source_quality": True,
+                                    "title_alignment": True,
+                                    "content_complete": True,
+                                },
+                            },
+                            "title": article.title,
+                            "article": rewrite_output["content"],
+                            "evidence": evidence_output,
+                        },
+                        ensure_ascii=False,
+                    ),
+                    max_tokens=1000,
+                ),
+                "review",
+            )
+        ),
     )
-    review_rules = strategy_config.get("review_rules", {})
-    human_review_required = bool(review_rules.get("human_review_required", True))
+    human_review_required = bool(review_rules.get("human_review_required", False))
+
+    approved_revision_id = (job.payload_json or {}).get("approved_revision_id")
+    approved_revision = db.get(ArticleRevision, approved_revision_id) if approved_revision_id else None
+    if approved_revision is not None and approved_revision.article_id != article.id:
+        approved_revision = None
 
     def render() -> dict[str, Any]:
-        content = rewrite_output["content"]
-        html = MarkdownIt("commonmark", {"breaks": True}).render(content)
-        revision = db.scalar(
+        content = (
+            approved_revision.content_markdown if approved_revision is not None else rewrite_output["content"]
+        )
+        theme_id = strategy_config.get("theme_id")
+        render_mode = strategy_config.get("render_mode", "deterministic")
+        revision = approved_revision or db.scalar(
             select(ArticleRevision)
             .where(ArticleRevision.article_id == article.id)
             .order_by(ArticleRevision.version.desc())
         )
         if revision is None:
-            revision = ArticleRevision(article_id=article.id, version=1, content_markdown=content, rendered_html=html)
+            revision = ArticleRevision(article_id=article.id, version=1, content_markdown=content)
             db.add(revision)
-        else:
+        elif approved_revision is None:
             revision.content_markdown = content
-            revision.rendered_html = html
         db.flush()
         rendered_version_id = None
-        theme_id = strategy_config.get("theme_id")
-        if theme_id:
+        fallback_reason = ""
+        if render_mode == "ai":
+            if not theme_id:
+                raise ValueError("AI 排版必须配置排版主题")
             theme = db.get(Theme, theme_id)
-            if theme is None:
-                raise ValueError("策略配置的排版主题不存在")
-            if not theme.enabled:
-                raise ValueError("策略配置的排版主题已停用")
-            rendered_version_id = render_revision(db, revision, theme).id
+            if theme is None or not theme.enabled:
+                raise ValueError("策略配置的排版主题不存在或已停用")
+            version = db.scalar(
+                select(ThemeVersion).where(
+                    ThemeVersion.theme_id == theme.id,
+                    ThemeVersion.version == theme.current_version,
+                )
+            )
+            if version is None:
+                raise ValueError("排版主题版本缺失")
+            try:
+                raw = _complete_with_log(
+                    db,
+                    job,
+                    article,
+                    stage_provider("render"),
+                    CompletionRequest(
+                        system=layout_instruction(theme, version) + skill_instruction("render"),
+                        user=f"文章标题：{article.title}\n\n文章正文（Markdown）：\n{content}",
+                        max_tokens=8000,
+                    ),
+                    "render",
+                )
+                html = extract_html(raw)
+                errors = validate_gzh_html(html)
+                if errors:
+                    raise ValueError(f"AI 排版输出不合规：{', '.join(errors[:4])}")
+                revision.rendered_html = html
+            except Exception as exc:
+                fallback_reason = str(exc)[:500]
+                _job_event(db, job, "render_fallback", "render", "warning", {"reason": fallback_reason})
+        if render_mode == "deterministic" or fallback_reason:
+            html = MarkdownIt("commonmark", {"breaks": True}).render(content)
+            revision.rendered_html = html
+            if theme_id:
+                theme = db.get(Theme, theme_id)
+                if theme is None:
+                    raise ValueError("策略配置的排版主题不存在")
+                if not theme.enabled:
+                    raise ValueError("策略配置的排版主题已停用")
+                rendered_version_id = render_revision(db, revision, theme).id
+        db.flush()
         return {
             "article_id": article.id,
             "revision_id": revision.id,
             "rendered_version_id": rendered_version_id,
-            "html_length": len(html),
+            "html_length": len(revision.rendered_html or ""),
         }
+
 
     render_output = _run_step(db, job, "render", render)
     rendered_revision = db.get(ArticleRevision, render_output["revision_id"])
     if rendered_revision is None:
         raise ValueError("渲染后的文章版本不存在")
     if rendered_revision.review is None:
-        db.add(
-            Review(
-                article_revision_id=rendered_revision.id,
-                status="pending",
-                auto_result_json={"status": "pass", "checks": {"fact_traceability": True, "source_quality": True}},
-            )
+        current_review = Review(
+            article_revision_id=rendered_revision.id,
+            status="pending",
+            auto_result_json=quality_review_output,
         )
+        db.add(current_review)
         db.flush()
-    current_review = rendered_revision.review
+    else:
+        current_review = rendered_revision.review
     if not human_review_required:
         if current_review is not None:
             current_review.status = "auto_approved"
@@ -781,18 +967,31 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
         return job
 
     def draft() -> dict[str, Any]:
-        article.status = "drafted"
+        delivery = deliver_article(db, article, rendered_revision, strategy_config)
         job.status = "succeeded"
         job.current_step = "draft"
         job.available_at = None
         job.lease_until = None
         job.completed_at = datetime.now(timezone.utc)
         _record_job_duration(job, job.completed_at)
+        if delivery.publish_blocked:
+            _job_event(
+                db,
+                job,
+                "auto_publish_blocked",
+                "draft",
+                "succeeded",
+                {"reason": delivery.publish_blocked, "publication_id": delivery.publication_id},
+            )
         db.flush()
         return {
             "article_id": article.id,
             "revision_id": render_output["revision_id"],
-            "publication": "local_draft",
+            "publication": delivery.mode,
+            "delivery_status": delivery.status,
+            "publication_id": delivery.publication_id,
+            "remote_id": delivery.remote_id,
+            "publish_blocked": delivery.publish_blocked,
         }
 
     _run_step(db, job, "draft", draft)

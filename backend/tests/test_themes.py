@@ -1,3 +1,5 @@
+from sqlalchemy import select
+
 from content_ops.api import add_theme, copy_theme, disable_theme, list_themes, preview_article_theme, update_theme
 from content_ops.models import Article, ArticleRevision, Job, RenderedVersion, Strategy, Theme
 from content_ops.schemas import ThemeCopy, ThemeCreate, ThemeUpdate
@@ -30,14 +32,18 @@ def test_builtin_themes_are_seeded_and_rendering_is_idempotent(db):
     db.commit()
 
     themes = db.query(Theme).order_by(Theme.slug).all()
-    assert len(themes) == 6
+    assert len(themes) == 10
     assert {theme.slug for theme in themes} == {
-        "swiss-blue-grid",
-        "night-flight",
-        "warm-reading",
-        "neon-lab",
-        "you-sir-column",
-        "briefing-paper",
+        "moyu-green",
+        "red-white",
+        "graphite-minimal",
+        "zen-whitespace",
+        "moyu-ticket",
+        "olive-journal",
+        "aws-classic-blue",
+        "aws-elegant-purple",
+        "aws-warm-orange",
+        "aws-minimal-black",
     }
 
     first = render_revision(db, revision, themes[0])
@@ -77,7 +83,7 @@ def test_theme_api_lists_builtins_and_previews_revision(db):
 
     preview = preview_article_theme(article.id, revision.id, listed[0].id, None, db)
 
-    assert len(listed) == 6
+    assert len(listed) == 10
     assert preview.theme_version == 1
     assert f'data-theme="{listed[0].slug}"' in preview.html
 
@@ -123,3 +129,41 @@ def test_custom_theme_tokens_are_inlined_for_wechat_rendering(db):
 
     assert "background:#112233" in rendered.html
     assert "color:#FF3366" in rendered.html
+
+
+def test_aiworkskills_themes_keep_their_distinctive_inline_styles(db):
+    _, revision = make_revision(db)
+    revision.content_markdown = """# 标题
+
+## 章节
+
+### 小节
+
+#### 四级标题
+
+正文 **重点**。
+
+> 引言
+
+- 列表
+
+```python
+print('hello')
+```
+
+---
+"""
+    ensure_builtin_themes(db)
+    db.commit()
+
+    expected_fragments = {
+        "aws-classic-blue": "background:#0F2A44",
+        "aws-elegant-purple": "border-left:5px solid #DEC6FB",
+        "aws-warm-orange": "color:#FDBA74",
+        "aws-minimal-black": "letter-spacing:4px",
+    }
+    for slug, fragment in expected_fragments.items():
+        theme = db.scalar(select(Theme).where(Theme.slug == slug))
+        assert theme is not None
+        rendered = render_revision(db, revision, theme)
+        assert fragment in rendered.html

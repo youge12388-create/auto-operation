@@ -1,5 +1,66 @@
 # PROJECT_STATE
 
+## 2026-08-06 Frontend visual redesign (Content Ops)
+
+- ?????????????????? + ????? + ??????????????????Aurora ?????????????Candy AI?????????????? JSX ??????????? CSS ????
+- `frontend/src/figma.css` ??????????`:root` ?????????? `--figma-pink`/`--figma-purple` ??????????/??????????????`frontend/src/ui-motion.css` ???????? `main.tsx` ????????????????????????????????????????????????????????????/??????? `prefers-reduced-motion`?`main.tsx` ???? `candy.css`?`ConsoleRoot.tsx` ???? `styles.css` / `console.css`?
+- ??? `login-stitch.css` ??????????? Google Fonts ????????????????/?????????????????? ?Candy AI? ?? ?Content Ops / ?????????
+- ? `figma.css` ??? `.runtime/figma.css.bak`?????????? `frontend/src/figma.css` ????
+- ???`pnpm build` ? `pnpm test`?9 ?????CDP ???? 6 ????? + ????? + ????????????????? `document.getAnimations()` ????????????
+
+## 2026-08-06 AI-assisted layout (render_mode=ai)
+
+- 新增 AI 装配排版：策略配置 `render_mode: deterministic|ai`（默认 deterministic）。`ai` 模式下，render 阶段把文章交给模型，模型按所选主题的组件模板生成完整微信 HTML（封面/编号章节/金句卡/列表/代码/数据表/结语）。
+- 模型指令由 `themes.layout_instruction()` 生成（组件模板 + 微信红线），输出经 `validate_gzh_html()` 校验；不合规或调用失败自动回退确定性渲染并记录 `render_fallback` 任务事件，文章不会卡死。
+- render 阶段已加入 MODEL_STAGES/SKILL_STAGES，可用 `model_by_stage.render` 或 `skill_by_stage.render` 指定排版模型/Skill；`ai` 模式必须配置 `theme_id`。
+- 交付（微信草稿）在 ai 模式下直接使用模型装配的 HTML（`delivery._channel_html` 不再用确定性渲染覆盖）；手动换主题建草稿仍走确定性渲染。
+- 预览接口 `/themes/{id}/preview?mode=ai` 支持 AI 装配预览（需要策略配置 render 阶段模型）；前端“审核与发布 → 微信草稿”预览面板新增“AI 排版预览”按钮，显式点击才调模型。
+- 后端新增 test_ai_layout.py 覆盖校验/提取/指令生成/render_mode 校验/ai 成功与回退路径。
+## 2026-08-06 Componentized theme rendering
+
+- 排版渲染从「markdown-it 标签 + 主题色」升级为「组件化装配」：正文的 h1/h2/h3、引用、列表、代码块、表格、图片、分割线会自动装配成主题组件（封面卡、编号章节标题、金句引用卡、要点列表、数据表、代码块、图片卡、结语区）。
+- 6 套内置主题（摸鱼绿/红白色系/石墨极简/留白禅意/摸鱼票据/橄榄手记）各定义了差异化组件模板，设计语言参考 gzh-design-skill 组件库与 iniwap/AIWriteX 模板结构；旧内置主题与自定义主题自动回退到通用组件 + 主题色。
+- 组件模板随主题 tokens 存入 `theme_versions.tokens_json.components`；既有内置主题在 `ensure_builtin_themes` 时自动补种组件，无需迁移脚本。
+- markdown-it 渲染启用了 table 插件；渲染产物保持微信兼容（全内联、无 class/style/div、装饰空元素带占位）。
+## 2026-08-06 Built-in article themes replaced with gzh-design-skill themes
+
+- 内置排版主题由原来的 6 套自创模板（swiss-blue-grid、night-flight、warm-reading、neon-lab、you-sir-column、briefing-paper）替换为来自 [crossoverJie/gzh-design-skill](https://github.com/crossoverJie/gzh-design-skill) 的 6 套精选主题：摸鱼绿（moyu-green）、红白色系（red-white）、石墨极简（graphite-minimal）、留白禅意（zen-whitespace）、摸鱼票据（moyu-ticket）、橄榄手记（olive-journal）。
+- 样式按其 references/theme-*.md 组件库提炼为标签级内联样式（article、h1-h3、p、blockquote、code/pre、a、img、hr、strong、列表、表格），微信兼容策略（禁 style/class，全内联）不变。
+- 原仓库为 AGPL-3.0，署名保留在 backend/src/content_ops/themes.py 顶部注释；后续若继续借鉴该仓库需保持署名。
+- 既有开发库中的旧主题记录不会被删除（仍可手动停用），全新数据库直接内置新 6 套。
+
+## 2026-08-05 Material-category migration applied locally
+
+- After an exact SQLite backup, local revision `0008_material_categories` was applied successfully. The backup is `backend/data/content_ops.before-0008.20260805-110114.db`.
+- The existing development database had no Alembic version record and already contained a partial `material_categories` table. Revision `0008` is therefore repair-safe: it preserves existing records, adds only missing `source_items` category fields and indexes, and seeds only missing built-in categories.
+- Migration verification found 217 source records preserved, all six required category fields present, and five built-in categories available. The Material Pool API is available again.
+
+## 2026-08-05 AI HOT source and material-pool closed loop
+
+- New `aihot_api` source type pulls AI HOT `/api/v1/items` (selected mode, default 24h window, up to 100 entries, optional category filter). Entries are stored as summaries with original and AI HOT links, official categories map to local material categories, and classification is recorded as AI-sourced without extra model calls. Collection stays deduplicated by canonical URL and keeps translation and retry behavior.
+- The material pool “采集设置” is now a source picker: check sources, confirm, then “立即采集” runs only the checked sources. Adding, editing, and disabling sources stays in “设置 → 信息源”.
+- Material cards are selectable in every pool tab, and a sticky selection bar provides the next step “创建选题并写作”, which creates a topic from the checked materials and starts writing, closing the pool → topic → review loop.
+## 2026-08-06 Collection isolation and generation reliability
+
+- Collection is now isolated per source: a failing source records a `source_failed` event and its error on the source, while the rest of the sources and the whole job continue. The collect step output reports `succeeded_sources` and `failed_sources`.
+- Writing/style/rewrite stages strip a trailing model self-check report (e.g. khazix-writer's “质检报告” section) from the article body instead of failing the stage; only a body that is still too short after stripping is rejected.
+- Job retry now retries a SQLite `database is locked` commit up to three times instead of failing silently.
+## 2026-08-05 Explicit writing-skill control
+
+- An unconfigured writing stage no longer falls back to khazix-writer. A Skill is only applied when the strategy configures one or the current creation explicitly selects one; otherwise writing runs with the generic editor instruction.
+- `POST /api/v1/topics/{id}/start-writing` accepts `{ writing_skill_id?, disable_writing_skill? }` and freezes the override into the job execution config at creation time.
+- The material-pool “创建选题并写作” dialog exposes a writing-skill selector (follow pipeline / generic writing without Skill / a specific published Skill), and a one-off selection overrides the pipeline for that run.
+- The automation pipeline page now has an “导入 Skill（ZIP）” entry; imported Skills can be published and then selected per combination.
+- New pipelines no longer auto-attach the first published Skill; the choice stays explicit.
+## 2026-08-04 Material-category automation and guarded delivery
+
+- Collection sources now end at the material-pool boundary. Foreign content is translated to Chinese before storage, then an enabled model assigns a persisted material category; failed classification keeps the material visible with a retryable error, and operators can correct it manually.
+- Material categories support create, edit, disable, restore, counts, and filtering. Source settings support edit, disable, and restore; ignored materials remain recoverable.
+- Automatic combinations now select material-pool categories. Each run performs model-backed curation and topic recommendation, then freezes the category scope, selected material IDs, and chosen topic in the job/article runtime snapshot. Legacy `source_ids` configurations still run.
+- Manual creation exposes queued/running/failed progress in the review page. Model quality review is persisted; a failed quality review always pauses at `waiting_review` and cannot reach delivery.
+- Delivery modes are `local_draft`, `wechat_draft`, and `auto_publish`. Existing and new unconfigured strategies remain `local_draft`. Automatic publication requires an explicit combination mode, no human review gate, a publish-capable account, a permanent cover media ID, a passing AI quality review, and the server-wide `AUTO_PUBLISH_ENABLED` switch. With the switch off, `auto_publish` stops safely after a successful WeChat draft.
+- WeChat draft retries and updates use revision/account idempotency keys. The approved library calls the update endpoint for an existing WeChat draft instead of creating a duplicate draft.
+- Alembic revision `0008_material_categories` is additive and reversible. It was applied to the local development database on 2026-08-05 after backup.
 ## 2026-07-31 Strategy-combination automation
 
 - One production line can contain multiple enabled strategy combinations. Each combination can override sources, stage models, stage Skills, theme, humanization, and review rules while inheriting the line's base configuration.
@@ -7,11 +68,11 @@
 - Job creation freezes the selected combination, strategy identity/version, and final execution configuration. Workers and article audit snapshots use that frozen state even if the production line is edited before execution.
 - Scheduled runs and production-line trial runs now execute the complete content workflow instead of stopping after collection. The material-first manual flow still uses scan jobs and stops at `waiting_topic`.
 - Topic algorithms are managed from Topic Radar, not the automation editor. A scan selects one enabled algorithm and freezes its complete definition in the job snapshot. Manual material entry bypasses source collection and enters the retained material pool directly.
-- Automatic formal publication is still out of scope. With the review gate enabled, jobs pause for review; with it disabled, they finish as local drafts. WeChat draft creation and publication keep their existing explicit safety boundary.
+- This section is historical. The 2026-08-04 guarded delivery design supersedes its local-draft-only limit while keeping safe defaults and explicit publication gates.
 
 ## 项目目标
 
-建立单租户、内部使用的 AI 自动内容运营后台，完成“信息源 → 选题 → 事实包 → 文章 → 审核 → 排版 → 微信公众号草稿”的可恢复闭环。
+建立单租户、内部使用的 AI 自动内容运营后台，完成“采集并翻译 → 素材分类与精选 → 自动选题 → 事实包 → 写作与质量审核 → 排版 → 微信草稿/受控自动发布”的可恢复闭环。
 
 ## 当前实现
 
@@ -31,7 +92,7 @@
 
 ## 关键边界
 
-- V1 默认只创建微信公众号草稿，不自动发布；没有发布权限时不能显示“已发布”。
+- 默认交付为本地成稿；选择微信草稿时不会正式发布。自动正式发布必须同时通过策略、AI 质量审核、账号能力和全局紧急开关四层保护；微信未确认成功时不能显示“已发布”。
 - 频道和模型凭证只保存密文，API 响应和日志只返回是否配置，不返回完整密钥。
 - 删除来源、模型、频道和 Skill 使用停用/软删除，保留运行历史和审计记录。
 - Skill 只允许 YAML、Markdown、示例和测试数据，不执行用户脚本。
@@ -39,10 +100,10 @@
 
 ## 测试与验证
 
-- 后端：69 项 pytest 通过，Ruff check 通过，Python/Alembic 编译检查通过。
-- 前端：Vitest 7 项通过，TypeScript 检查通过，Vite 生产构建通过；390、768、1280 px 核心页面无页面级横向溢出。
+- 后端：93 项 pytest 通过；本轮新增模块与迁移 Ruff check 通过；Python/Alembic 编译检查通过。
+- 前端：Vitest 9 项通过；TypeScript 检查通过；Vite 生产构建通过；390、768、1280 px 核心页面无页面级横向溢出。
 - Docker Compose 配置已完成；当前机器没有 Docker CLI，未执行 `docker compose config` 和容器验收。
-- 前端构建仍有约 618 KB 单包警告，属于性能优化项，不影响构建成功。
+- 前端构建仍有约 648 KB 单包警告，属于性能优化项，不影响构建成功。
 
 ## 尚未完成的外部验收
 

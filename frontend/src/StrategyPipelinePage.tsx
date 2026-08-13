@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  type ChannelAccount,
   type Job,
   type Model,
   type Skill,
-  type Source,
+  type MaterialCategory,
   type Strategy,
   type StrategyCombination,
   type StrategyConfig,
@@ -13,6 +14,7 @@ import {
   type Theme,
 } from "./api";
 import { Icon } from "./design";
+import { applyWechatAutoPublishTemplate } from "./wechatPublishTemplate";
 
 const TEXT = {
   title: "\u81ea\u52a8\u5316\u751f\u4ea7\u7ebf",
@@ -25,6 +27,8 @@ const TEXT = {
   manual: "\u624b\u52a8\u6267\u884c",
   hourly: "\u6bcf\u5c0f\u65f6",
   daily: "\u6bcf\u5929",
+  dailyAt: "\u56fa\u5b9a\u65f6\u523b\uff08\u5317\u4eac\u65f6\u95f4\uff09",
+  dailyAtHelp: "\u6bcf\u5929\u4ec5\u4f1a\u5165\u961f 1 \u6b21\uff1b\u670d\u52a1\u91cd\u542f\u540e\u5f53\u5929\u6700\u591a\u8865\u8dd1 1 \u6b21\u3002",
   selectionMode: "\u81ea\u52a8\u8fd0\u884c\u65b9\u5f0f",
   fixed: "\u59cb\u7ec8\u4f7f\u7528\u9ed8\u8ba4\u7ec4\u5408",
   roundRobin: "\u6bcf\u6b21\u4f9d\u6b21\u8f6e\u6362\u7ec4\u5408",
@@ -39,8 +43,8 @@ const TEXT = {
   disabled: "\u5df2\u505c\u7528",
   systemDefault: "\u4f7f\u7528\u7cfb\u7edf\u9ed8\u8ba4",
   combinationName: "\u7ec4\u5408\u540d\u79f0",
-  sources: "\u4fe1\u606f\u6e90",
-  allSources: "\u7559\u7a7a\u8868\u793a\u4f7f\u7528\u5168\u90e8\u542f\u7528\u7684\u4fe1\u606f\u6e90",
+  materialPool: "\u7d20\u6750\u6c60\u8303\u56f4",
+  allCategories: "\u7559\u7a7a\u8868\u793a\u4ece\u7d20\u6750\u6c60\u7684\u5168\u90e8\u542f\u7528\u5206\u7c7b\u4e2d\u81ea\u52a8\u9009\u6750",
   writingSkill: "\u5199\u4f5c Skill",
   writingModel: "\u5199\u4f5c\u6a21\u578b",
   theme: "\u6392\u7248\u6a21\u677f",
@@ -48,6 +52,7 @@ const TEXT = {
   on: "\u5f00\u542f",
   off: "\u5173\u95ed",
   humanization: "\u81ea\u7136\u5ea6",
+  wechatPublishTemplate: "\u5e94\u7528\u516c\u4f17\u53f7\u6b63\u5f0f\u53d1\u5e03\u6a21\u677f",
   remove: "\u5220\u9664\u7ec4\u5408",
   duplicate: "\u590d\u5236\u7ec4\u5408",
   save: "\u4fdd\u5b58\u751f\u4ea7\u7ebf",
@@ -68,6 +73,24 @@ const TEXT = {
   running: "\u8fd0\u884c\u4e2d...",
 };
 
+const DAILY_AT_PATTERN = /^daily@(([01]\d|2[0-3]):[0-5]\d)$/;
+
+export function scheduleMode(schedule: string): "manual" | "hourly" | "daily" {
+  return schedule === "hourly" ? "hourly" : schedule.startsWith("daily") ? "daily" : "manual";
+}
+
+export function dailyTime(schedule: string): string {
+  const match = DAILY_AT_PATTERN.exec(schedule);
+  return match?.[1] ?? "";
+}
+
+export function validatedSchedule(schedule: string): string {
+  if (scheduleMode(schedule) === "daily" && !DAILY_AT_PATTERN.test(schedule)) {
+    throw new Error("每日运行必须设置固定时刻（HH:MM）。");
+  }
+  return schedule;
+}
+
 type SavePayload = StrategyPayload & { enabled: boolean; config: StrategyConfig };
 
 type Props = {
@@ -75,13 +98,16 @@ type Props = {
   selectedId: string | null;
   onSelect: (id: string) => void;
   onNew: () => void;
-  sources: Source[];
+  categories: MaterialCategory[];
   skills: Skill[];
   themes: Theme[];
   models: Model[];
+  channels: ChannelAccount[];
   onSave: (id: string | undefined, payload: SavePayload) => Promise<Strategy>;
   onRun: (id: string, combinationId?: string) => Promise<Job>;
-  onAddSource: () => void;
+  onManageMaterials: () => void;
+  onImportSkill: (file: File) => Promise<void>;
+  importingSkill: boolean;
 };
 
 type PipelineDraft = {
@@ -99,19 +125,20 @@ function id(): string {
   return globalThis.crypto?.randomUUID?.() ?? `combination-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function defaultCombination(sources: Source[], skills: Skill[], models: Model[], themes: Theme[]): StrategyCombination {
+function defaultCombination(categories: MaterialCategory[], skills: Skill[], models: Model[], themes: Theme[], _channels: ChannelAccount[]): StrategyCombination {
   return {
     id: id(),
     name: TEXT.unnamed,
     enabled: true,
     config: {
-      source_ids: [],
-      skill_ids: skills.find((item) => item.status === "published") ? [skills.find((item) => item.status === "published")!.id] : [],
+      material_category_ids: [],
+      skill_ids: [],
       model_by_stage: models.find((item) => item.enabled) ? { writing: models.find((item) => item.enabled)!.id } : {},
       theme_id: themes.find((item) => item.enabled)?.id,
       humanization: 75,
-      review_rules: { human_review_required: true },
-      source_mode: sources.length ? "internal" : "realtime",
+      review_rules: { human_review_required: false },
+      delivery_mode: "local_draft",
+      material_scope: categories.length ? "category" : "all",
     },
   };
 }
@@ -133,22 +160,22 @@ export function mergeCombinationConfig(base: StrategyConfig, override: StrategyC
     review_rules: { ...(base.review_rules ?? {}), ...(override.review_rules ?? {}) },
   };
 }
-function SourceSelector({ sources, value, onChange }: { sources: Source[]; value: string[]; onChange: (ids: string[]) => void }) {
-  const enabledSources = sources.filter((source) => source.enabled);
-  const selected = value.filter((id) => enabledSources.some((source) => source.id === id));
+function CategorySelector({ categories, value, onChange }: { categories: MaterialCategory[]; value: string[]; onChange: (ids: string[]) => void }) {
+  const enabledCategories = categories.filter((category) => category.enabled);
+  const selected = value.filter((id) => enabledCategories.some((category) => category.id === id));
   const toggle = (id: string) => onChange(selected.includes(id) ? selected.filter((item) => item !== id) : [...selected, id]);
   return <details className="source-selector">
-    <summary><span>{selected.length ? `已选择 ${selected.length} 个信息源` : "全部启用的信息源"}</span><small>点击选择</small></summary>
+    <summary><span>{selected.length ? `已选择 ${selected.length} 个素材分类` : "全部启用的素材分类"}</span><small>点击选择</small></summary>
     <div className="source-selector-menu">
-      <label className="source-selector-all"><input type="checkbox" checked={!selected.length} onChange={() => onChange([])} />使用全部启用的信息源</label>
-      {enabledSources.map((source) => <label key={source.id}><input type="checkbox" checked={selected.includes(source.id)} onChange={() => toggle(source.id)} />{source.name}<small>{source.source_type.toUpperCase()}</small></label>)}
+      <label className="source-selector-all"><input type="checkbox" checked={!selected.length} onChange={() => onChange([])} />使用素材池全部启用分类</label>
+      {enabledCategories.map((category) => <label key={category.id}><input type="checkbox" checked={selected.includes(category.id)} onChange={() => toggle(category.id)} />{category.name}<small>{category.material_count} 条</small></label>)}
     </div>
   </details>;
 }
 
-function initialDraft(strategy: Strategy | null, sources: Source[], skills: Skill[], models: Model[], themes: Theme[]): PipelineDraft {
+function initialDraft(strategy: Strategy | null, categories: MaterialCategory[], skills: Skill[], models: Model[], themes: Theme[], channels: ChannelAccount[]): PipelineDraft {
   if (!strategy) {
-    const combination = defaultCombination(sources, skills, models, themes);
+    const combination = defaultCombination(categories, skills, models, themes, channels);
     return {
       name: TEXT.newName,
       objective: TEXT.defaultObjective,
@@ -180,27 +207,32 @@ function initialDraft(strategy: Strategy | null, sources: Source[], skills: Skil
 
 function stripCombinationFields(config: StrategyConfig): StrategyConfig {
   const copy = { ...config };
-  for (const key of ["source_ids", "skill_ids", "skill_by_stage", "model_by_stage", "theme_id", "humanization", "review_rules", "source_mode", "material_ids", "topic_algorithm", "selection_mode", "default_combination_id", "strategy_combinations"]) {
+  for (const key of ["source_ids", "material_category_ids", "skill_ids", "skill_by_stage", "model_by_stage", "theme_id", "humanization", "review_rules", "delivery_mode", "channel_account_id", "wechat_thumb_media_id", "source_mode", "material_ids", "topic_algorithm", "selection_mode", "default_combination_id", "strategy_combinations"]) {
     delete copy[key];
   }
   return copy;
 }
 
-function withoutLegacyTopicAlgorithm(config: StrategyConfig): StrategyConfig {
+export function sanitizeCombinationConfig(config: StrategyConfig): StrategyConfig {
   const copy = { ...config };
   delete copy.topic_algorithm;
+  if ((copy.delivery_mode ?? "local_draft") === "local_draft") {
+    delete copy.channel_account_id;
+    delete copy.wechat_thumb_media_id;
+  }
   return copy;
 }
 
 export function StrategyPipelinePage(props: Props) {
   const current = props.strategies.find((item) => item.id === props.selectedId) ?? null;
-  const [draft, setDraft] = useState(() => initialDraft(current, props.sources, props.skills, props.models, props.themes));
+  const [draft, setDraft] = useState(() => initialDraft(current, props.categories, props.skills, props.models, props.themes, props.channels));
   const [activeCombinationId, setActiveCombinationId] = useState(draft.combinations[0]?.id ?? "");
   const [busy, setBusy] = useState<"save" | "auto" | "current" | null>(null);
   const [error, setError] = useState("");
+  const skillFileRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    const next = initialDraft(current, props.sources, props.skills, props.models, props.themes);
+    const next = initialDraft(current, props.categories, props.skills, props.models, props.themes, props.channels);
     setDraft(next);
     setActiveCombinationId(next.defaultCombinationId || next.combinations[0]?.id || "");
     setError("");
@@ -210,19 +242,21 @@ export function StrategyPipelinePage(props: Props) {
   const enabledSkills = props.skills.filter((item) => item.status === "published");
   const enabledModels = props.models.filter((item) => item.enabled);
   const enabledThemes = props.themes.filter((item) => item.enabled);
+  const enabledChannels = props.channels.filter((item) => item.enabled);
   const enabledCount = draft.combinations.filter((item) => item.enabled).length;
   const resourceNames = useMemo(() => ({
     skills: new Map(props.skills.map((item) => [item.id, item.name])),
     models: new Map(props.models.map((item) => [item.id, item.name])),
     themes: new Map(props.themes.map((item) => [item.id, item.name])),
-  }), [props.models, props.skills, props.themes]);
+    channels: new Map(props.channels.map((item) => [item.id, item.name])),
+  }), [props.channels, props.models, props.skills, props.themes]);
 
   const updateActive = (update: (item: StrategyCombination) => StrategyCombination) => {
     setDraft((value) => ({ ...value, combinations: value.combinations.map((item) => item.id === active.id ? update(item) : item) }));
   };
 
   const addCombination = () => {
-    const combination = defaultCombination(props.sources, props.skills, props.models, props.themes);
+    const combination = defaultCombination(props.categories, props.skills, props.models, props.themes, props.channels);
     setDraft((value) => ({ ...value, combinations: [...value.combinations, combination] }));
     setActiveCombinationId(combination.id);
   };
@@ -267,7 +301,7 @@ export function StrategyPipelinePage(props: Props) {
     return {
       name: draft.name.trim() || TEXT.newName,
       objective: draft.objective.trim() || TEXT.defaultObjective,
-      schedule: draft.schedule,
+      schedule: validatedSchedule(draft.schedule),
       automation_level: draft.automationLevel,
       enabled: draft.enabled,
       config: {
@@ -277,7 +311,7 @@ export function StrategyPipelinePage(props: Props) {
         strategy_combinations: draft.combinations.map((item) => ({
           ...item,
           name: item.name.trim() || TEXT.unnamed,
-          config: withoutLegacyTopicAlgorithm(item.config),
+          config: sanitizeCombinationConfig(item.config),
         })),
       },
     };
@@ -299,7 +333,9 @@ export function StrategyPipelinePage(props: Props) {
   return <main className="figma-page pipeline-page">
     <div className="figma-page-heading strategy-heading">
       <div><h1><span className="title-icon"><Icon name="settings" size={22} /></span>{TEXT.title}</h1><p>{TEXT.subtitle}</p></div>
-      <button className="strategy-source-link" type="button" onClick={props.onAddSource}><Icon name="link" size={16} />{TEXT.sources}<span>{props.sources.length}</span></button>
+      <button className="strategy-source-link" type="button" onClick={props.onManageMaterials}><Icon name="database" size={16} />{TEXT.materialPool}<span>{props.categories.filter((item) => item.enabled).length}</span></button>
+      <button className="strategy-source-link" type="button" disabled={props.importingSkill} onClick={() => skillFileRef.current?.click()}>{props.importingSkill ? "导入中…" : "导入 Skill（ZIP）"}</button>
+      <input ref={skillFileRef} type="file" accept=".zip,application/zip" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void props.onImportSkill(file); event.target.value = ""; }} />
     </div>
     <section className="pipeline-layout">
       <aside className="pipeline-list-panel">
@@ -320,7 +356,8 @@ export function StrategyPipelinePage(props: Props) {
           <div className="strategy-meta-grid">
             <label className="strategy-meta-field"><small>{TEXT.pipelineName}</small><input value={draft.name} onChange={(event) => setDraft((value) => ({ ...value, name: event.target.value }))} /></label>
             <label className="strategy-meta-field"><small>{TEXT.objective}</small><input value={draft.objective} onChange={(event) => setDraft((value) => ({ ...value, objective: event.target.value }))} /></label>
-            <label className="strategy-meta-field"><small>{TEXT.schedule}</small><select value={draft.schedule} onChange={(event) => setDraft((value) => ({ ...value, schedule: event.target.value }))}><option value="manual">{TEXT.manual}</option><option value="hourly">{TEXT.hourly}</option><option value="daily">{TEXT.daily}</option></select></label>
+            <label className="strategy-meta-field"><small>{TEXT.schedule}</small><select value={scheduleMode(draft.schedule)} onChange={(event) => setDraft((value) => ({ ...value, schedule: event.target.value === "daily" ? (DAILY_AT_PATTERN.test(value.schedule) ? value.schedule : "daily@") : event.target.value }))}><option value="manual">{TEXT.manual}</option><option value="hourly">{TEXT.hourly}</option><option value="daily">{TEXT.daily}</option></select></label>
+            {scheduleMode(draft.schedule) === "daily" && <label className="strategy-meta-field"><small>{TEXT.dailyAt}</small><input type="time" value={dailyTime(draft.schedule)} onChange={(event) => setDraft((value) => ({ ...value, schedule: `daily@${event.target.value}` }))} required /><span>{TEXT.dailyAtHelp}</span></label>}
             <label className="strategy-meta-field"><small>{TEXT.selectionMode}</small><select value={draft.selectionMode} onChange={(event) => setDraft((value) => ({ ...value, selectionMode: event.target.value as StrategySelectionMode }))}><option value="fixed">{TEXT.fixed}</option><option value="round_robin">{TEXT.roundRobin}</option></select><span>{TEXT.selectionModeHelp}</span></label>
           </div>
           <label className="strategy-enabled-toggle"><input type="checkbox" checked={draft.enabled} onChange={(event) => setDraft((value) => ({ ...value, enabled: event.target.checked }))} />{TEXT.enabled}</label>
@@ -335,15 +372,16 @@ export function StrategyPipelinePage(props: Props) {
               <label className="combination-name"><small>{TEXT.combinationName}</small><input maxLength={100} value={active.name} onChange={(event) => updateActive((item) => ({ ...item, name: event.target.value }))} /></label>
               <label className="strategy-enabled-toggle"><input type="checkbox" checked={active.enabled} disabled={active.enabled && enabledCount === 1} onChange={(event) => setActiveEnabled(event.target.checked)} />{TEXT.combinationEnabled}</label>
               <button type="button" className={`combination-default ${active.id === draft.defaultCombinationId ? "is-default" : ""}`} disabled={!active.enabled} onClick={() => setDraft((value) => ({ ...value, defaultCombinationId: active.id }))}>{TEXT.default}</button>
+              <button type="button" onClick={() => updateActive((item) => ({ ...item, config: applyWechatAutoPublishTemplate(item.config) }))}>{TEXT.wechatPublishTemplate}</button>
             </div>
             <div className="combination-fields">
-              <label><small>{TEXT.sources}</small><SourceSelector sources={props.sources} value={active.config.source_ids ?? []} onChange={(sourceIds) => updateActive((item) => ({ ...item, config: { ...item.config, source_ids: sourceIds } }))} /><span>{TEXT.allSources}</span></label>
+              <label><small>{TEXT.materialPool}</small><CategorySelector categories={props.categories} value={active.config.material_category_ids ?? []} onChange={(categoryIds) => updateActive((item) => ({ ...item, config: { ...item.config, material_category_ids: categoryIds } }))} /><span>{TEXT.allCategories}</span></label>
               <label><small>{TEXT.writingSkill}</small><select value={(active.config.skill_by_stage ?? {}).writing ?? active.config.skill_ids?.[0] ?? ""} onChange={(event) => updateActive((item) => {
                 const skillByStage = { ...(item.config.skill_by_stage ?? {}) };
                 if (event.target.value) skillByStage.writing = event.target.value;
                 else delete skillByStage.writing;
                 return { ...item, config: { ...item.config, skill_ids: [], skill_by_stage: skillByStage } };
-              })}><option value="">{TEXT.systemDefault}</option>{enabledSkills.map((item) => <option key={item.id} value={item.id}>{item.name}{" \u00b7 v"}{item.version}</option>)}</select></label>
+              })}><option value="">通用写作（不套用 Skill）</option>{enabledSkills.map((item) => <option key={item.id} value={item.id}>{item.name}{" \u00b7 v"}{item.version}</option>)}</select></label>
               <label><small>{TEXT.writingModel}</small><select value={(active.config.model_by_stage ?? {}).writing ?? ""} onChange={(event) => updateActive((item) => {
                 const modelByStage = { ...(item.config.model_by_stage ?? {}) };
                 if (event.target.value) modelByStage.writing = event.target.value;
@@ -351,10 +389,12 @@ export function StrategyPipelinePage(props: Props) {
                 return { ...item, config: { ...item.config, model_by_stage: modelByStage } };
               })}><option value="">{TEXT.systemDefault}</option>{enabledModels.map((item) => <option key={item.id} value={item.id}>{item.provider} / {item.name}</option>)}</select></label>
               <label className="combination-review"><small>{TEXT.translation}</small><button type="button" className={active.config.translate_foreign_sources !== false ? "is-on" : ""} onClick={() => updateActive((item) => ({ ...item, config: { ...item.config, translate_foreign_sources: item.config.translate_foreign_sources === false } }))}>{active.config.translate_foreign_sources !== false ? TEXT.on : TEXT.off}</button><span>{TEXT.translationHelp}</span></label><label><small>{TEXT.theme}</small><select value={active.config.theme_id ?? ""} onChange={(event) => updateActive((item) => ({ ...item, config: { ...item.config, theme_id: event.target.value || undefined } }))}><option value="">{TEXT.disabled}</option>{enabledThemes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
-              <label className="combination-review"><small>{TEXT.review}</small><button type="button" className={(active.config.review_rules?.human_review_required ?? true) ? "is-on" : ""} onClick={() => updateActive((item) => ({ ...item, config: { ...item.config, review_rules: { ...(item.config.review_rules ?? {}), human_review_required: !(item.config.review_rules?.human_review_required ?? true) } } }))}>{(active.config.review_rules?.human_review_required ?? true) ? TEXT.on : TEXT.off}</button></label>
+              <label className="combination-review"><small>{TEXT.review}</small><button type="button" disabled={active.config.delivery_mode === "auto_publish"} className={(active.config.review_rules?.human_review_required ?? false) ? "is-on" : ""} onClick={() => updateActive((item) => ({ ...item, config: { ...item.config, review_rules: { ...(item.config.review_rules ?? {}), human_review_required: !(item.config.review_rules?.human_review_required ?? false) } } }))}>{(active.config.review_rules?.human_review_required ?? false) ? TEXT.on : TEXT.off}</button><span>{active.config.delivery_mode === "auto_publish" ? "AI 审核仅记录风险提示，不阻塞自动交付" : "默认关闭；开启后文章必须由你通过后才能交付"}</span></label>
+              <label><small>交付模式</small><select value={active.config.delivery_mode ?? "local_draft"} onChange={(event) => updateActive((item) => { const deliveryMode = event.target.value as "local_draft" | "wechat_draft" | "auto_publish"; return { ...item, config: { ...item.config, delivery_mode: deliveryMode, review_rules: { ...(item.config.review_rules ?? {}), human_review_required: deliveryMode === "auto_publish" ? false : (item.config.review_rules?.human_review_required ?? false) } } }; })}><option value="local_draft">本地成稿（不调用微信）</option><option value="wechat_draft">微信草稿测试</option><option value="auto_publish">自动正式发布</option></select><span>{active.config.delivery_mode === "auto_publish" ? "会先创建草稿；默认开启评论；只有服务器全局发布开关开启且账号有权限时才提交正式发布" : active.config.delivery_mode === "wechat_draft" ? "自动写入微信草稿，不会正式发布" : "生成后进入本系统成稿库"}</span></label>
+              {(active.config.delivery_mode === "wechat_draft" || active.config.delivery_mode === "auto_publish") && <><label><small>微信公众号</small><select value={active.config.channel_account_id ?? ""} onChange={(event) => updateActive((item) => ({ ...item, config: { ...item.config, channel_account_id: event.target.value || undefined } }))}><option value="">请选择账号</option>{enabledChannels.map((channel) => <option key={channel.id} value={channel.id}>{channel.name}{channel.capabilities.publish ? " · 可发布" : " · 仅草稿"}</option>)}</select></label><label><small>默认封面素材 ID</small><input value={active.config.wechat_thumb_media_id ?? ""} onChange={(event) => updateActive((item) => ({ ...item, config: { ...item.config, wechat_thumb_media_id: event.target.value.trim() || undefined } }))} placeholder="微信永久素材 media_id" /><span>自动交付必须使用已经上传到该公众号的永久封面素材</span></label></>}
               <label className="combination-range"><small>{TEXT.humanization} <b>{Number(active.config.humanization ?? 75)}%</b></small><input type="range" min="0" max="100" value={Number(active.config.humanization ?? 75)} onChange={(event) => updateActive((item) => ({ ...item, config: { ...item.config, humanization: Number(event.target.value) } }))} /></label>
             </div>
-            <div className="combination-summary"><span><Icon name="database" size={15} />{active.config.source_ids?.length || TEXT.all}</span><b>{"\u2192"}</b><span><Icon name="magic" size={15} />{resourceNames.skills.get((active.config.skill_by_stage ?? {}).writing ?? active.config.skill_ids?.[0] ?? "") ?? TEXT.default}</span><b>{"\u2192"}</b><span><Icon name="robot" size={15} />{resourceNames.models.get((active.config.model_by_stage ?? {}).writing ?? "") ?? TEXT.default}</span><b>{"\u2192"}</b><span><Icon name="image" size={15} />{resourceNames.themes.get(active.config.theme_id ?? "") ?? TEXT.default}</span></div>
+            <div className="combination-summary"><span><Icon name="database" size={15} />{active.config.material_category_ids?.length || TEXT.all}</span><b>{"\u2192"}</b><span><Icon name="magic" size={15} />{resourceNames.skills.get((active.config.skill_by_stage ?? {}).writing ?? active.config.skill_ids?.[0] ?? "") ?? TEXT.default}</span><b>{"\u2192"}</b><span><Icon name="robot" size={15} />{resourceNames.models.get((active.config.model_by_stage ?? {}).writing ?? "") ?? TEXT.default}</span><b>{"\u2192"}</b><span><Icon name="image" size={15} />{resourceNames.themes.get(active.config.theme_id ?? "") ?? TEXT.default}</span><b>{"→"}</b><span><Icon name="mail" size={15} />{active.config.delivery_mode === "auto_publish" ? "自动发布" : active.config.delivery_mode === "wechat_draft" ? (resourceNames.channels.get(active.config.channel_account_id ?? "") ?? "微信草稿") : "本地成稿"}</span></div>
             <div className="combination-actions"><button type="button" onClick={duplicateCombination}>{TEXT.duplicate}</button><button type="button" className="danger" onClick={removeCombination}>{TEXT.remove}</button></div>
           </div>}
         </section>

@@ -25,8 +25,6 @@ import {
   type ReviewTab,
   type SettingsTab,
 } from "./pages";
-import "./styles.css";
-import "./console.css";
 
 function stringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
@@ -35,6 +33,20 @@ function stringArray(value: unknown): string[] {
 function stringRecord(value: unknown): Record<string, string> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return Object.fromEntries(Object.entries(value).filter(([, item]) => typeof item === "string")) as Record<string, string>;
+}
+
+function scheduleFormValues(schedule: string): { mode: string; time?: string } {
+  const match = /^daily@([01]\d|2[0-3]):[0-5]\d$/.exec(schedule);
+  return match ? { mode: "daily", time: match[1] } : { mode: schedule };
+}
+
+function scheduleFromForm(mode: unknown, time: unknown): string {
+  if (mode !== "daily") return String(mode);
+  const value = String(time ?? "");
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) {
+    throw new Error("Daily time is required");
+  }
+  return `daily@${value}`;
 }
 
 function Login({ onSuccess }: { onSuccess: (user: User) => void }) {
@@ -72,11 +84,10 @@ function Login({ onSuccess }: { onSuccess: (user: User) => void }) {
             <Form.Item label="密码" name="password" rules={[{ required: true, message: "请输入密码" }]}>
               <Input.Password size="large" prefix={<Icon name="lock" size={18} />} placeholder="admin" />
             </Form.Item>
-            <div className="login-options"><Checkbox checked={remember} onChange={(event) => setRemember(event.target.checked)}>保持登录状态</Checkbox><button type="button">忘记密码？</button></div>
+            <div className="login-options"><Checkbox checked={remember} onChange={(event) => setRemember(event.target.checked)}>保持登录状态</Checkbox></div>
             <Button size="large" block type="primary" htmlType="submit" loading={login.isPending}>登 录</Button>
           </Form>
           <div className="security-note"><span><Icon name="shield" />受组织权限保护</span><i /><span><Icon name="lock" />数据传输及存储已加密</span></div>
-          <div className="login-help"><p>需要帮助？　<a>查看产品文档</a>　·　<a>联系系统管理员</a></p><small>系统不会在页面或日志中展示完整 API Key、AppSecret 等敏感凭证。</small></div>
         </div>
       </section>
     </main>
@@ -279,23 +290,29 @@ function Console({ currentUser }: { currentUser: User }) {
   const openStrategy = (strategy?: Strategy) => { setEditingStrategy(strategy ?? null); setStrategyOpen(true); };
   const editingConfig = editingStrategy?.config ?? {};
   const editingModels = stringRecord(editingConfig.model_by_stage);
+  const editingSchedule = scheduleFormValues(editingStrategy?.schedule ?? "manual");
   const editingSkills = stringRecord(editingConfig.skill_by_stage);
   const strategyInitialValues = editingStrategy ? {
     name: editingStrategy.name,
     objective: editingStrategy.objective,
-    schedule: editingStrategy.schedule,
+    schedule: editingSchedule.mode,
     automation_level: editingStrategy.automation_level,
+    daily_time: editingSchedule.time,
     enabled: editingStrategy.enabled,
     source_ids: stringArray(editingConfig.source_ids),
     channel_account_id: editingConfig.channel_account_id,
     theme_id: editingConfig.theme_id,
+    delivery_mode: editingConfig.delivery_mode ?? "local_draft",
+    wechat_thumb_media_id: editingConfig.wechat_thumb_media_id,
     writing_model_id: editingModels.writing,
     rewrite_model_id: editingModels.rewrite,
+    render_model_id: editingModels.render,
     writing_skill_id: editingSkills.writing,
     rewrite_skill_id: editingSkills.rewrite,
     review_skill_id: editingSkills.review,
     human_review_required: (editingConfig.review_rules as { human_review_required?: boolean } | undefined)?.human_review_required !== false,
-  } : { schedule: "manual", automation_level: "L2", source_ids: [], enabled: true, human_review_required: true };
+    render_mode: editingConfig.render_mode === "ai" ? "ai" : "deterministic",
+  } : { schedule: "manual", automation_level: "L2", source_ids: [], enabled: true, human_review_required: true, delivery_mode: "local_draft" };
 
   const pageContent = useMemo(() => {
     const shared = {
@@ -325,24 +342,30 @@ function Console({ currentUser }: { currentUser: User }) {
 
       <Modal title={editingStrategy ? "编辑内容策略" : "新增内容策略"} open={strategyOpen} footer={null} onCancel={() => setStrategyOpen(false)} width={760}>
         <Form key={editingStrategy?.id ?? "new"} layout="vertical" initialValues={strategyInitialValues} onFinish={(values: Record<string, unknown>) => {
-          const modelByStage = Object.fromEntries([["writing", values.writing_model_id], ["rewrite", values.rewrite_model_id]].filter(([, value]) => typeof value === "string"));
+          const modelByStage = Object.fromEntries([["writing", values.writing_model_id], ["rewrite", values.rewrite_model_id], ["render", values.render_model_id]].filter(([, value]) => typeof value === "string"));
           const skillByStage = Object.fromEntries([["writing", values.writing_skill_id], ["rewrite", values.rewrite_skill_id], ["review", values.review_skill_id]].filter(([, value]) => typeof value === "string"));
-          saveStrategy.mutate({ id: editingStrategy?.id, payload: { name: String(values.name), objective: String(values.objective), schedule: String(values.schedule), automation_level: String(values.automation_level), enabled: values.enabled === true, config: { source_ids: values.source_ids as string[] ?? [], channel_account_id: values.channel_account_id as string || undefined, theme_id: values.theme_id as string || undefined, model_by_stage: modelByStage as Record<string, string>, skill_by_stage: skillByStage as Record<string, string>, review_rules: { human_review_required: values.human_review_required !== false } } } });
+          saveStrategy.mutate({ id: editingStrategy?.id, payload: { name: String(values.name), objective: String(values.objective), schedule: scheduleFromForm(values.schedule, values.daily_time), automation_level: String(values.automation_level), enabled: values.enabled === true, config: { source_ids: values.source_ids as string[] ?? [], channel_account_id: values.channel_account_id as string || undefined, delivery_mode: values.delivery_mode as "local_draft" | "wechat_draft" | "auto_publish" || "local_draft", wechat_thumb_media_id: values.wechat_thumb_media_id as string || undefined, theme_id: values.theme_id as string || undefined, render_mode: values.render_mode === "ai" ? "ai" : "deterministic", model_by_stage: modelByStage as Record<string, string>, skill_by_stage: skillByStage as Record<string, string>, review_rules: { human_review_required: values.human_review_required !== false } } } });
         }}>
           <div className="modal-form-grid">
             <Form.Item label="策略名称" name="name" rules={[{ required: true }]}><Input /></Form.Item>
             <Form.Item label="运行频率" name="schedule"><Select options={[{ label: "手动执行", value: "manual" }, { label: "每小时", value: "hourly" }, { label: "每天", value: "daily" }]} /></Form.Item>
             <Form.Item className="span-2" label="内容目标" name="objective" rules={[{ required: true }]}><Input.TextArea rows={2} /></Form.Item>
+            <Form.Item noStyle shouldUpdate={(previous, current) => previous.schedule !== current.schedule}>{({ getFieldValue }) => getFieldValue("schedule") === "daily" ? <Form.Item label="每日执行时间" name="daily_time" rules={[{ required: true, message: "请选择每日执行时间" }]} extra="按北京时间执行；服务恢复后同一天最多补跑一次"><Input type="time" /></Form.Item> : null}</Form.Item>
             <Form.Item className="span-2" label="信息源组合" name="source_ids" extra="留空表示使用全部启用的信息源"><Select mode="multiple" allowClear options={(sources.data ?? []).map((item) => ({ label: item.name, value: item.id }))} /></Form.Item>
             <Form.Item label="自动化等级" name="automation_level"><Select options={["L1", "L2", "L3", "L4"].map((value) => ({ label: value, value }))} /></Form.Item>
             <Form.Item label="默认发布账号" name="channel_account_id"><Select allowClear options={(channels.data ?? []).map((item) => ({ label: item.name, value: item.id }))} /></Form.Item>
+            <Form.Item label="交付方式" name="delivery_mode" extra="自动正式发布会先创建草稿，再提交公众号正式发布"><Select options={[{ label: "本地成稿", value: "local_draft" }, { label: "自动推送微信草稿", value: "wechat_draft" }, { label: "自动正式发布", value: "auto_publish" }]} /></Form.Item>
+            <Form.Item className="span-2" label="默认封面素材 ID" name="wechat_thumb_media_id" extra="微信自动交付必须使用已上传到该公众号的永久封面素材"><Input /></Form.Item>
             <Form.Item label="写作模型" name="writing_model_id"><Select allowClear options={(models.data ?? []).filter((item) => item.enabled).map((item) => ({ label: `${item.provider} / ${item.name}`, value: item.id }))} /></Form.Item>
             <Form.Item label="改写模型" name="rewrite_model_id"><Select allowClear options={(models.data ?? []).filter((item) => item.enabled).map((item) => ({ label: `${item.provider} / ${item.name}`, value: item.id }))} /></Form.Item>
             <Form.Item label="Writing Skill" name="writing_skill_id"><Select allowClear options={(skills.data ?? []).filter((item) => item.status === "published").map((item) => ({ label: `${item.name} / ${item.version}`, value: item.id }))} /></Form.Item>
             <Form.Item label="Rewrite Skill" name="rewrite_skill_id"><Select allowClear options={(skills.data ?? []).filter((item) => item.status === "published").map((item) => ({ label: `${item.name} / ${item.version}`, value: item.id }))} /></Form.Item>
             <Form.Item label="Review Skill" name="review_skill_id"><Select allowClear options={(skills.data ?? []).filter((item) => item.status === "published").map((item) => ({ label: `${item.name} / ${item.version}`, value: item.id }))} /></Form.Item>
             <Form.Item label="默认排版主题" name="theme_id"><Select allowClear options={(themes.data ?? []).filter((item) => item.enabled).map((item) => ({ label: item.name, value: item.id }))} /></Form.Item>
+            <Form.Item label="排版模式" name="render_mode" extra="AI 排版：模型按主题组件生成整篇 HTML，失败自动回退确定性渲染"><Select options={[{ label: "确定性渲染", value: "deterministic" }, { label: "AI 装配排版", value: "ai" }]} /></Form.Item>
+            <Form.Item label="排版模型（AI 模式）" name="render_model_id" extra="AI 排版使用的模型；留空则使用默认模型"><Select allowClear options={(models.data ?? []).filter((item) => item.enabled).map((item) => ({ label: `${item.provider} / ${item.name}`, value: item.id }))} /></Form.Item>
           </div>
+          <p className="muted-copy">自动正式发布需启用自动调度、关闭人工审核门，并在服务器环境开启 AUTO_PUBLISH_ENABLED。</p>
           <Space><Form.Item name="enabled" valuePropName="checked"><Checkbox>启用自动调度</Checkbox></Form.Item><Form.Item name="human_review_required" valuePropName="checked"><Checkbox>生成后必须人工审核</Checkbox></Form.Item></Space>
           <Button type="primary" htmlType="submit" loading={saveStrategy.isPending}>保存策略组合</Button>
         </Form>
@@ -366,8 +389,3 @@ function Console({ currentUser }: { currentUser: User }) {
     </div>
   );
 }
-
-
-
-
-

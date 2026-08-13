@@ -9,6 +9,17 @@ $statePath = Join-Path $runtimeRoot "local-processes.json"
 $pythonPath = Join-Path $backendRoot ".venv\Scripts\python.exe"
 $vitePath = Join-Path $frontendRoot "node_modules\vite\bin\vite.js"
 
+# Some hosts inject both Path and PATH into this process. Windows treats them as
+# one variable, but Start-Process rejects the duplicate dictionary keys.
+$processPath = [System.Environment]::GetEnvironmentVariable("Path", "Process")
+if (-not $processPath) {
+    $processPath = [System.Environment]::GetEnvironmentVariable("PATH", "Process")
+}
+[System.Environment]::SetEnvironmentVariable("PATH", $null, "Process")
+if ($processPath) {
+    [System.Environment]::SetEnvironmentVariable("Path", $processPath, "Process")
+}
+
 New-Item -ItemType Directory -Path $logRoot -Force | Out-Null
 
 function Show-Message([string]$message, [int]$seconds = 8) {

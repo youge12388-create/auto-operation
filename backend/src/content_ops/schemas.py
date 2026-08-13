@@ -45,7 +45,7 @@ class SourceGroupUpdate(BaseModel):
 
 class SourceCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
-    source_type: str = Field(default="rss", pattern="^(rss|url|manual)$")
+    source_type: str = Field(default="rss", pattern="^(rss|url|manual|aihot_api)$")
     url: str = ""
     group_name: str = "default"
     group_id: str | None = None
@@ -62,6 +62,30 @@ class SourceRead(SourceCreate):
     last_error: str | None = None
 
 
+class MaterialCategoryCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    description: str = Field(default="", max_length=500)
+    classification_instructions: str = Field(default="", max_length=2000)
+    enabled: bool = True
+
+
+class MaterialCategoryUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=100)
+    description: str | None = Field(default=None, max_length=500)
+    classification_instructions: str | None = Field(default=None, max_length=2000)
+    enabled: bool | None = None
+
+
+class MaterialCategoryRead(MaterialCategoryCreate):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    is_builtin: bool = False
+    material_count: int = 0
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
 class MaterialRead(BaseModel):
     id: str
     source_id: str
@@ -72,6 +96,13 @@ class MaterialRead(BaseModel):
     published_at: datetime | None = None
     created_at: datetime | None = None
     triage_status: Literal["inbox", "selected", "ignored", "used"]
+    category_id: str | None = None
+    category_name: str | None = None
+    classification_status: Literal["pending", "classified", "failed", "unclassified"] = "pending"
+    classification_source: Literal["ai", "manual"] | None = None
+    classification_confidence: float | None = None
+    classification_reason: str | None = None
+    classification_error: str | None = None
 
 
 class MaterialDetailRead(MaterialRead):
@@ -94,10 +125,43 @@ class MaterialBatchTopicCreate(BaseModel):
     material_ids: list[str] = Field(min_length=1, max_length=12)
     title: str | None = Field(default=None, max_length=500)
 
+class TopicStartWriting(BaseModel):
+    writing_skill_id: str | None = None
+    disable_writing_skill: bool = False
+
 
 class MaterialTriage(BaseModel):
     decision: Literal["save", "ignore", "reopen"]
 
+
+class MaterialCategoryAssign(BaseModel):
+    category_id: str | None = None
+
+
+class MaterialClassifyRequest(BaseModel):
+    material_ids: list[str] = Field(default_factory=list, max_length=300)
+    retry_failed: bool = True
+
+
+class MaterialClassifyRead(BaseModel):
+    candidate_count: int
+    classified_count: int
+    failed_count: int
+    message: str
+
+
+class MaterialCurateRequest(BaseModel):
+    strategy_id: str
+    material_ids: list[str] = Field(default_factory=list, max_length=50)
+    limit: int = Field(default=12, ge=1, le=50)
+
+
+class MaterialCurateRead(BaseModel):
+    candidate_count: int
+    selected_count: int
+    selected_ids: list[str]
+    selected_titles: list[str]
+    message: str
 
 class StrategyCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
@@ -273,6 +337,8 @@ class SourceCollectRead(BaseModel):
     source_id: str
     count: int
     item_ids: list[str]
+    classified_count: int = 0
+    classification_failed_count: int = 0
 
 
 class SkillVersionRead(BaseModel):
