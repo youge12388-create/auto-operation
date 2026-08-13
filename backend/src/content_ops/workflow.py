@@ -543,7 +543,122 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
             job,
             "job_waiting_topic",
             "topic",
-            "waiting_topic",…1322 tokens truncated… _job_event(
+            "waiting_topic",
+            {"material_count": len(collected), "topic_count": topic_output["topic_count"]},
+        )
+        db.commit()
+        db.refresh(job)
+        return job
+
+    def configured_model(stage: str) -> ModelConfig | None:
+        model_id = model_id_for_stage(strategy_config, stage, job_model_id)
+        if not model_id:
+            return None
+        model = db.get(ModelConfig, model_id)
+        if model is None:
+            raise ValueError(f"阶段 {stage} 关联的模型不存在")
+        if not model.enabled:
+            raise ValueError(f"阶段 {stage} 关联的模型已停用")
+        return model
+
+    stage_models = {stage: configured_model(stage) for stage in ("writing", "style", "rewrite", "review", "render")}
+    article = _article(db, job, snapshot_strategy_version)
+    if not article.model_snapshot:
+        writing_model = stage_models["writing"]
+        article.model_snapshot = {
+            **model_snapshot(writing_model, provider.__class__.__name__),
+            "stages": {
+                stage: model_snapshot(model, provider.__class__.__name__) for stage, model in stage_models.items()
+            },
+        }
+    if not article.skill_snapshot:
+        skill_objects = {
+            stage: skill_for_stage_config(db, strategy_config, stage)
+            for stage in ("writing", "style", "rewrite", "review", "render")
+        }
+        article.skill_snapshot = {
+            "strategy_version": snapshot_strategy_version,
+            "skill_ids": strategy_config.get("skill_ids", []),
+            "skills": strategy_config.get("skills", {}),
+            "stages": {stage: skill_snapshot(skill) for stage, skill in skill_objects.items() if skill is not None},
+        }
+    if not article.runtime_snapshot_json:
+        source_ids = strategy_config.get("source_ids", [])
+        source_query = select(Source).where(Source.enabled.is_(True))
+        if source_ids:
+            source_query = source_query.where(Source.id.in_(source_ids))
+        source_snapshot = [
+            {
+                "id": source.id,
+                "name": source.name,
+                "source_type": source.source_type,
+                "url": source.url,
+                "group_name": source.group_name,
+            }
+            for source in db.scalars(source_query.order_by(Source.id)).all()
+        ]
+        article.runtime_snapshot_json = {
+            "strategy": {
+                "id": strategy_runtime_snapshot.get("id", strategy.id),
+                "version": snapshot_strategy_version,
+                "name": strategy_runtime_snapshot.get("name", strategy.name),
+                "automation_level": strategy_runtime_snapshot.get("automation_level", strategy.automation_level),
+                "disabled_steps": strategy_config.get("disabled_steps", []),
+                "source_ids": strategy_config.get("source_ids", []),
+                "channel_account_id": strategy_config.get("channel_account_id"),
+            },
+            "combination": job_runtime_snapshot.get("combination", {}),
+            "execution_config": strategy_config,
+            "model": article.model_snapshot,
+            "skills": article.skill_snapshot,
+            "sources": source_snapshot,
+            "theme": {
+                "id": strategy_config.get("theme_id"),
+                "version": strategy_config.get("theme_version"),
+            },
+            "review_rules": strategy_config.get("review_rules", {"human_review_required": False}),
+        }
+        job.payload_json = {**(job.payload_json or {}), "runtime_snapshot": article.runtime_snapshot_json}
+    db.flush()
+    if job.started_at is None:
+        job.started_at = datetime.now(timezone.utc)
+    job.completed_at = None
+    job.status = "running"
+    job.available_at = None
+    job.lease_until = None
+    db.commit()
+
+    collected: dict[str, Any] = {"items": []}
+    disabled_steps = set(strategy_config.get("disabled_steps", []))
+
+    def stage_provider(stage: str) -> ModelProvider:
+        model = stage_models.get(stage)
+        return provider_for(model) if model is not None else provider
+
+    def skill_instruction(stage: str) -> str:
+        skill = skill_for_stage_config(db, strategy_config, stage)
+        return f"\n\nSkill 指令（{skill.name} {skill.version}）：\n{skill.prompt}" if skill else ""
+
+    def collect() -> dict[str, Any]:
+        source_query = select(Source).where(Source.enabled.is_(True))
+        source_ids = strategy_config.get("source_ids", [])
+        if source_ids:
+            source_query = source_query.where(Source.id.in_(source_ids))
+        sources = db.scalars(source_query).all()
+        collected_items: list[str] = []
+        source_failures: dict[str, str] = {}
+        for source in sources:
+            try:
+                for item in collect_source(
+                    db,
+                    source,
+                    translation_job=job,
+                    translate_foreign_sources=strategy_config.get("translate_foreign_sources", True),
+                ):
+                    collected_items.append(item.id)
+            except Exception as exc:
+                source_failures[source.name] = str(exc)[:500]
+                _job_event(
                     db,
                     job,
                     "source_failed",

@@ -375,7 +375,324 @@ function Dashboard({ currentUser }: { currentUser: User }) {
   });
   const disableSource = useMutation({
     mutationFn: api.disableSource,
-    onSuccess: () => queryC…5796 tokens truncated…"点击后选择 JPG 封面" : undefined} disabled={!revision} loading={createWechatDraft.isPending} onClick={() => { if (!revision) return; if (!thumbMediaId) { message.info("请先选择一张 JPG 封面"); openCoverPicker(); return; } createWechatDraft.mutate({ articleId: row.id, revisionId: revision.id }); }}>{thumbMediaId ? "创建微信草稿" : "先上传封面"}</Button>
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["sources"] }),
+    onError: (error: Error) => message.error(error.message),
+  });  const collectSource = useMutation({
+    mutationFn: api.collectSource,
+    onSuccess: (result) => {
+      message.success(`已采集 ${result.count} 条内容`);
+      queryClient.invalidateQueries({ queryKey: ["sources"] });
+    },
+    onError: (error: Error) => message.error(error.message),
+  });
+  const saveStrategy = useMutation({
+    mutationFn: ({ id, payload }: { id?: string; payload: StrategyPayload }) => id ? api.updateStrategy(id, payload) : api.addStrategy(payload),
+    onSuccess: () => {
+      setStrategyOpen(false);
+      setEditingStrategy(null);
+      queryClient.invalidateQueries({ queryKey: ["strategies"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      message.success("策略组合已保存");
+    },
+    onError: (error: Error) => message.error(error.message),
+  });
+const openNewStrategy = () => { setEditingStrategy(null); setStrategyOpen(true); };
+  const openCoverPicker = () => {
+    selectSection("publish");
+    window.requestAnimationFrame(() => document.querySelector<HTMLInputElement>(".wechat-panel input[type=file]")?.click());
+  };
+  const handleLogout = () => {
+    Modal.confirm({
+      title: "退出当前账号？",
+      content: currentUser.email,
+      okText: "退出登录",
+      cancelText: "取消",
+      onOk: async () => {
+        await api.logout();
+        window.location.reload();
+      },
+    });
+  };
+  const closeStrategy = () => { setStrategyOpen(false); setEditingStrategy(null); };
+  const runStrategy = useMutation({
+    mutationFn: (id: string) => api.runStrategy(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["articles"] });
+    },
+    onError: (error: Error) => message.error(error.message),
+  });
+  const retryJob = useMutation({
+    mutationFn: api.retryJob,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["jobs"] }),
+    onError: (error: Error) => message.error(error.message),
+  });
+  const cancelJob = useMutation({
+    mutationFn: api.cancelJob,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["jobs"] }),
+    onError: (error: Error) => message.error(error.message),
+  });
+  const publishSkill = useMutation({
+    mutationFn: api.publishSkill,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["skills"] }),
+    onError: (error: Error) => message.error(error.message),
+  });
+  const disableSkill = useMutation({
+    mutationFn: api.disableSkill,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["skills"] }),
+    onError: (error: Error) => message.error(error.message),
+  });  const addModel = useMutation({
+    mutationFn: api.addModel,
+    onSuccess: () => { setModelOpen(false); queryClient.invalidateQueries({ queryKey: ["models"] }); },
+    onError: (error: Error) => message.error(error.message),
+  });
+  const importSkill = useMutation({
+    mutationFn: api.importSkill,
+    onSuccess: () => { message.success("Skill 导入成功"); queryClient.invalidateQueries({ queryKey: ["skills"] }); },
+    onError: (error: Error) => message.error(error.message),
+  });  const disableModel = useMutation({
+    mutationFn: api.disableModel,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["models"] }),
+    onError: (error: Error) => message.error(error.message),
+  });  const testModel = useMutation({
+    mutationFn: api.testModel,
+    onSuccess: (result) => (result.ok ? message.success(result.message) : message.error(result.message)),
+    onError: (error: Error) => message.error(error.message),
+  });
+  const testWechat = useMutation({
+    mutationFn: api.testWechatConnection,
+    onSuccess: (result) => (result.connected ? message.success(result.message) : message.error(result.message)),
+    onError: (error: Error) => message.error(error.message),
+  });
+  const addChannelAccount = useMutation({
+    mutationFn: api.addChannelAccount,
+    onSuccess: () => { setChannelOpen(false); queryClient.invalidateQueries({ queryKey: ["channel-accounts"] }); },
+    onError: (error: Error) => message.error(error.message),
+  });  const disableChannelAccount = useMutation({
+    mutationFn: api.disableChannelAccount,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["channel-accounts"] }),
+    onError: (error: Error) => message.error(error.message),
+  });  const testChannelAccount = useMutation({
+    mutationFn: api.testChannelAccount,
+    onSuccess: (result) => (result.connected ? message.success(result.message) : message.error(result.message)),
+    onError: (error: Error) => message.error(error.message),
+  });
+  const uploadWechatThumb = useMutation({
+    mutationFn: (file: File) => api.uploadWechatThumb(file, selectedChannelId || undefined),
+    onSuccess: (result) => {
+      setThumbMediaId(result.media_id);
+      window.localStorage.setItem(thumbStorageKey, result.media_id);
+      message.success("封面素材上传成功，后续刷新会自动恢复");
+    },
+    onError: (error: Error) => message.error(error.message),
+  });
+  const reviewArticle = useMutation({
+    mutationFn: ({ articleId, revisionId, decision }: { articleId: string; revisionId: string; decision: "approve" | "reject" | "request_changes" }) =>
+      api.reviewArticle(articleId, revisionId, decision),
+    onSuccess: (_result, variables) => {
+      message.success(variables.decision === "approve" ? "审核已通过，任务将继续执行" : "审核结果已保存");
+      queryClient.invalidateQueries({ queryKey: ["articles"] });
+      queryClient.invalidateQueries({ queryKey: ["jobs"] });
+    },
+    onError: (error: Error) => message.error(error.message),
+  });
+  const decideTopic = useMutation({
+    mutationFn: ({ id, decision }: { id: string; decision: "accept" | "reject" | "merge" }) =>
+      api.decideTopic(id, decision),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["topics"] }),
+    onError: (error: Error) => message.error(error.message),
+  });
+  const saveRevision = useMutation({
+    mutationFn: ({ articleId, contentMarkdown }: { articleId: string; contentMarkdown: string }) =>
+      api.addRevision(articleId, contentMarkdown),
+    onSuccess: () => {
+      setEditingArticle(null);
+      message.success("文章新版本已保存");
+      queryClient.invalidateQueries({ queryKey: ["articles"] });
+    },
+    onError: (error: Error) => message.error(error.message),
+  });
+  const publishWechatDraft = useMutation({
+    mutationFn: ({ articleId, revisionId }: { articleId: string; revisionId: string }) =>
+      api.publishWechatDraft(articleId, revisionId, selectedChannelId),
+    onSuccess: () => {
+      message.success("已提交，等待微信官方确认发布状态");
+      queryClient.invalidateQueries({ queryKey: ["articles"] });
+    },
+    onError: (error: Error) => message.error(error.message),
+  });  const createWechatDraft = useMutation({
+    mutationFn: ({ articleId, revisionId }: { articleId: string; revisionId: string }) =>
+      api.createWechatDraft(articleId, revisionId, { thumb_media_id: thumbMediaId, channel_account_id: selectedChannelId || undefined, theme_id: selectedThemeId || undefined }),
+    onSuccess: () => {
+      message.success("微信公众号草稿已创建");
+      queryClient.invalidateQueries({ queryKey: ["articles"] });
+    },
+    onError: (error: Error) => message.error(error.message),
+  });
+
+  return (
+    <Layout className="app-shell">
+      <Sider className="app-sider" theme="light" collapsed={sidebarCollapsed} collapsedWidth={64} trigger={null}>
+        <div className="brand">内容运营平台</div>
+        <Menu className="app-nav"
+          selectedKeys={[activeSection]}
+          onClick={({ key }) => selectSection(key)}
+          items={[
+            { key: "dashboard", icon: <UiIcon name="grid" />, label: "\u5DE5\u4F5C\u53F0" },
+            { key: "materials", icon: <UiIcon name="database" />, label: "\u7D20\u6750\u6C60" },
+            { key: "content", icon: <UiIcon name="content" />, label: "\u9009\u9898\u4E0E\u521B\u4F5C" },
+            { key: "publish", icon: <UiIcon name="send" />, label: "\u5BA1\u6838\u4E0E\u53D1\u5E03" },
+            { key: "system", icon: <UiIcon name="settings" />, label: "\u7B56\u7565\u4E0E\u8BBE\u7F6E" },
+          ]}
+        />
+<button type="button" className="sidebar-user" onClick={handleLogout} title="账号与退出登录">
+          <span className="sidebar-avatar"><UiIcon name="user" size={20} /></span>
+          <span className="sidebar-user-copy"><strong>{currentUser.email.split("@")[0]}</strong><small>{currentUser.role === "admin" ? "超级管理员" : "内容运营"}</small></span>
+          <span className="sidebar-online" />
+        </button>
+      </Sider>
+      <Layout className="app-main">
+        <Header className="app-header">
+          <div className="header-leading">
+            <button type="button" className="header-menu-button" aria-label="打开导航" onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}><UiIcon name="menu" /></button>
+            <div className="header-title-block">
+              <Typography.Title level={3}>{activeNavItem.label}</Typography.Title>
+              <Typography.Text type="secondary">欢迎回来，{currentUser.email.split("@")[0]}</Typography.Text>
+            </div>
+          </div>
+          <div className="header-tools">
+            <button type="button" className="header-tool-button" aria-label="搜索" onClick={() => selectSection("content")}><UiIcon name="search" /></button>
+            <button type="button" className="header-tool-button header-notification" aria-label="通知" onClick={() => selectSection("publish")}><UiIcon name="bell" />{notificationCount > 0 && <span>{notificationCount}</span>}</button>
+            <button type="button" className="header-tool-button" aria-label="帮助" onClick={() => message.info("左侧菜单可定位到内容、发布、素材、数据和系统区域") }><UiIcon name="help" /></button>
+            <button type="button" className="header-account-button" onClick={handleLogout} title="账号与退出登录">
+              <span className="header-avatar"><UiIcon name="user" size={17} /></span>
+              <span className="header-account">{currentUser.email.split("@")[0]} <span className="header-chevron" aria-hidden="true" /></span>
+            </button>          </div>
+        </Header>
+        <Content className={`content content--${activeSection}`}>
+          <Space wrap className="stats page-section page-dashboard page-analytics" id="analytics-overview">
+            <Card className="stat-card stat-card--red"><div className="stat-card-inner"><span className="stat-icon"><UiIcon name="team" size={24} /></span><span><span className="stat-label">信息源</span><strong className="stat-value">{dashboard.data?.sources ?? 0}</strong></span></div></Card>
+            <Card className="stat-card stat-card--blue"><div className="stat-card-inner"><span className="stat-icon"><UiIcon name="file" size={24} /></span><span><span className="stat-label">内容策略</span><strong className="stat-value">{dashboard.data?.strategies ?? 0}</strong></span></div></Card>
+            <Card className="stat-card stat-card--green"><div className="stat-card-inner"><span className="stat-icon"><UiIcon name="send" size={24} /></span><span><span className="stat-label">自动任务</span><strong className="stat-value">{dashboard.data?.jobs ?? 0}</strong></span></div></Card>
+            <Card className="stat-card stat-card--purple"><div className="stat-card-inner"><span className="stat-icon"><UiIcon name="edit" size={24} /></span><span><span className="stat-label">文章</span><strong className="stat-value">{dashboard.data?.articles ?? 0}</strong></span></div></Card>
+          </Space>
+
+          <Card title={"\u5F85\u5904\u7406\u5DE5\u4F5C"} className="panel page-section page-panel page-dashboard queue-panel">
+            <div className="queue-items">
+              <button type="button" className="queue-item queue-item--materials" onClick={() => selectSection("materials")}>
+                <span><strong>{materials.data?.filter((item) => item.triage_status === "inbox").length ?? 0}</strong><small>{"\u6761\u5F85\u7B5B\u9009\u7D20\u6750"}</small></span>
+                <em>{"\u53BB\u9009\u5199\u4F5C\u4F9D\u636E"}</em>
+              </button>
+              <button type="button" className="queue-item queue-item--topics" onClick={() => selectSection("content")}>
+                <span><strong>{topics.data?.filter((topic) => topic.status === "candidate").length ?? 0}</strong><small>{"\u4E2A\u5F85\u786E\u8BA4\u9009\u9898"}</small></span>
+                <em>{"\u786E\u8BA4\u540E\u624D\u521B\u4F5C"}</em>
+              </button>
+              <button type="button" className="queue-item queue-item--review" onClick={() => selectSection("publish")}>
+                <span><strong>{articles.data?.filter((article) => article.review?.status === "pending").length ?? 0}</strong><small>{"\u7BC7\u5F85\u5BA1\u6838\u6587\u7AE0"}</small></span>
+                <em>{"\u5BA1\u6838\u540E\u521B\u5EFA\u8349\u7A3F"}</em>
+              </button>
+            </div>
+          </Card>
+          <Card title="微信公众号" id="materials-management" className="panel page-section page-panel page-publish wechat-panel">
+            <Space wrap>
+              <Button loading={testWechat.isPending} onClick={() => testWechat.mutate()}>测试环境连接</Button>
+              <Select
+                value={selectedChannelId || undefined}
+                placeholder="选择公众号账号"
+                style={{ minWidth: 220 }}
+                options={channelAccounts.data?.map((account) => ({ label: account.name, value: account.id }))}
+                onChange={setSelectedChannelId}
+              />
+              <Upload
+                accept=".jpg,.jpeg,image/jpeg"
+                showUploadList={false}
+                beforeUpload={(file) => { uploadWechatThumb.mutate(file); return false; }}
+              >
+                <Button loading={uploadWechatThumb.isPending}>上传 JPG 封面</Button>
+              </Upload>
+            </Space>
+            <Typography.Paragraph type="secondary" className="panel-note">
+              封面素材上传成功后会返回 media_id，创建草稿时使用该素材。
+              {testWechat.data && <><Tag color={testWechat.data.connected ? "green" : "red"}>{testWechat.data.connected ? "公众号连接正常" : "公众号连接失败"}</Tag><Typography.Text type={testWechat.data.connected ? "secondary" : "danger"}>{testWechat.data.message}</Typography.Text></>}
+            </Typography.Paragraph>
+          </Card>
+
+          <Card title="快捷操作" id="dashboard-overview" className="panel page-section page-panel page-dashboard quick-panel">
+            <div className="quick-actions">
+              <QuickAction icon="content" label="新建策略" caption="创建内容策略" onClick={() => openNewStrategy()} />
+              <QuickAction icon="file" label="添加来源" caption="接入信息来源" onClick={() => setSourceOpen(true)} />
+              <QuickAction icon="upload" label="上传素材" caption="上传 JPG 封面" onClick={() => document.querySelector<HTMLInputElement>(".wechat-panel input[type=file]")?.click()} />
+              <QuickAction icon="report" label="查看指标" caption="查看运营概况" onClick={() => document.querySelector(".stats")?.scrollIntoView({ behavior: "smooth", block: "center" })} />
+            </div>
+          </Card>
+          <Card title="渠道账号" extra={<Button type="primary" onClick={() => setChannelOpen(true)}>绑定公众号</Button>} className="panel page-section page-panel page-publish">
+            <Table rowKey="id" loading={channelAccounts.isLoading} dataSource={channelAccounts.data} pagination={false} columns={[
+              { title: "名称", dataIndex: "name" },
+              { title: "类型", dataIndex: "channel_type" },
+              { title: "凭证", render: (_: unknown, row: ChannelAccount) => row.has_credentials ? <Tag color="green">已配置</Tag> : <Tag>未配置</Tag> },
+              { title: "操作", render: (_: unknown, row: ChannelAccount) => row.id === ENV_CHANNEL_ID ? <Space><Button size="small" loading={testWechat.isPending} onClick={() => testWechat.mutate()}>测试连接</Button><Tag>来自 .env</Tag></Space> : <Space><Button size="small" loading={testChannelAccount.isPending} onClick={() => testChannelAccount.mutate(row.id)}>测试连接</Button><Button size="small" danger loading={disableChannelAccount.isPending} onClick={() => disableChannelAccount.mutate(row.id)}>停用</Button></Space> },
+            ]} />
+          </Card>
+
+          <Card title="选题候选" className="panel page-section page-panel page-content">
+            <Table rowKey="id" loading={topics.isLoading} dataSource={topics.data} pagination={false} columns={[
+              { title: "标题", dataIndex: "title" },
+              { title: "评分", dataIndex: "score" },
+              { title: "状态", render: (_: unknown, row: Topic) => <TopicStatus status={row.status} /> },
+              { title: "操作", render: (_: unknown, row: Topic) => row.status === "candidate" ? <Space><Button size="small" type="primary" loading={decideTopic.isPending} onClick={() => decideTopic.mutate({ id: row.id, decision: "accept" })}>{"\u786E\u8BA4\u9009\u9898"}</Button><Button size="small" danger loading={decideTopic.isPending} onClick={() => decideTopic.mutate({ id: row.id, decision: "reject" })}>{"\u5FFD\u7565"}</Button></Space> : row.status === "accepted" ? <Button size="small" type="primary" loading={startTopicWriting.isPending} onClick={() => startTopicWriting.mutate(row.id)}>{"\u5F00\u59CB\u521B\u4F5C"}</Button> : row.status === "writing" ? <Tag color="purple">{"\u521B\u4F5C\u4E2D"}</Tag> : null },
+            ]} />
+          </Card>
+
+          <Card
+            title={"\u7D20\u6750\u6C60"}
+            extra={<Space><Tag color="blue">{materials.data?.filter((item) => item.triage_status === "inbox").length ?? 0}{" \u5F85\u7B5B\u9009"}</Tag><Button onClick={() => selectSection("system")}>{"\u914D\u7F6E\u4FE1\u606F\u6E90"}</Button></Space>}
+            className="panel page-section page-panel page-materials material-pool-panel"
+          >
+            <Typography.Paragraph type="secondary" className="panel-note">{"\u91C7\u96C6\u5B8C\u6210\u540E\uFF0C\u5148\u5728\u6B64\u5904\u9605\u8BFB\u548C\u9009\u5B9A\u5199\u4F5C\u4F9D\u636E\u3002\u7B56\u7565\u53EA\u8D1F\u8D23\u626B\u63CF\u7D20\u6750\uFF0C\u4E0D\u4F1A\u81EA\u52A8\u8BB2\u6700\u65B0\u4E00\u6761\u5199\u6210\u6587\u7AE0\u3002"}</Typography.Paragraph>
+            <Table
+              rowKey="id"
+              loading={materials.isLoading}
+              dataSource={materials.data}
+              pagination={{ pageSize: 10, showSizeChanger: false }}
+              columns={[
+                { title: "\u7D20\u6750", dataIndex: "title", width: "34%", render: (_: unknown, row: Material) => <div className="material-title"><strong>{row.title}</strong><span>{row.content_excerpt || row.url}</span></div> },
+                { title: "\u6765\u6E90", dataIndex: "source_name", width: "16%" },
+                { title: "\u91C7\u96C6\u65F6\u95F4", dataIndex: "created_at", width: "16%", render: (value: string | null) => value ? new Date(value).toLocaleString() : "-" },
+                { title: "\u72B6\u6001", width: "12%", render: (_: unknown, row: Material) => <MaterialStatus status={row.triage_status} /> },
+                { title: "\u64CD\u4F5C", width: "22%", render: (_: unknown, row: Material) => <Space wrap>
+                  <Button size="small" onClick={() => setMaterialPreviewId(row.id)}>{"\u67E5\u770B"}</Button>
+                  {row.triage_status === "inbox" && <Button size="small" type="primary" onClick={() => setTopicMaterial(row)}>{"\u9009\u4F5C\u4F9D\u636E"}</Button>}
+                  {row.triage_status === "inbox" && <Button size="small" danger loading={triageMaterial.isPending} onClick={() => triageMaterial.mutate({ id: row.id, decision: "ignore" })}>{"\u5FFD\u7565"}</Button>}
+                  {row.triage_status === "ignored" && <Button size="small" loading={triageMaterial.isPending} onClick={() => triageMaterial.mutate({ id: row.id, decision: "reopen" })}>{"\u6062\u590D"}</Button>}
+                  {row.triage_status === "selected" && <Button size="small" onClick={() => selectSection("content")}>{"\u67E5\u770B\u9009\u9898"}</Button>}
+                </Space> },
+              ]}
+            />
+          </Card>
+          <Card title="信息源" extra={<Button type="primary" onClick={() => setSourceOpen(true)}>添加来源</Button>} className="panel page-section page-panel page-system">
+            <Table rowKey="id" loading={sources.isLoading} dataSource={sources.data} pagination={false} columns={[
+              { title: "名称", dataIndex: "name" },
+              { title: "类型", dataIndex: "source_type" },
+              { title: "地址", dataIndex: "url" },
+              { title: "状态", render: (_: unknown, row: Source) => row.enabled ? <Tag color="green">启用</Tag> : <Tag>停用</Tag> },
+              { title: "操作", render: (_: unknown, row: Source) => <Space><Button size="small" loading={collectSource.isPending} onClick={() => collectSource.mutate(row.id)}>立即采集</Button><Button size="small" danger loading={disableSource.isPending} onClick={() => disableSource.mutate(row.id)}>停用</Button></Space> },
+            ]} />
+          </Card>
+
+          <Card title="文章草稿" id="content-management" className="panel page-section page-panel page-content page-publish">
+            <Typography.Paragraph type="secondary" className="panel-note">
+              当前封面素材：{thumbMediaId || "尚未上传"}
+            </Typography.Paragraph>
+            <Table rowKey="id" loading={articles.isLoading} dataSource={articles.data} pagination={false} columns={[
+              { title: "标题", dataIndex: "title" },
+              { title: "状态", render: (_: unknown, row: Article) => <ArticleStatus status={row.status} /> },
+              { title: "操作", render: (_: unknown, row: Article) => {
+                const revision = row.revisions[row.revisions.length - 1];
+                return <Space wrap>
+                  {revision && <Button onClick={() => { setEditingArticle(row); setSelectedThemeId(themes.data?.[0]?.id ?? ""); }}>编辑文章</Button>}
+                  {revision && <Button onClick={() => setEvidenceArticleId(row.id)}>查看事实包</Button>}
+                  {row.review?.status === "pending" && revision && <><Button loading={reviewArticle.isPending} onClick={() => reviewArticle.mutate({ articleId: row.id, revisionId: revision.id, decision: "approve" })}>审核通过</Button><Button danger loading={reviewArticle.isPending} onClick={() => reviewArticle.mutate({ articleId: row.id, revisionId: revision.id, decision: "request_changes" })}>退回修改</Button></>}
+                  <Button title={!revision ? "文章没有可用版本" : !thumbMediaId ? "点击后选择 JPG 封面" : undefined} disabled={!revision} loading={createWechatDraft.isPending} onClick={() => { if (!revision) return; if (!thumbMediaId) { message.info("请先选择一张 JPG 封面"); openCoverPicker(); return; } createWechatDraft.mutate({ articleId: row.id, revisionId: revision.id }); }}>{thumbMediaId ? "创建微信草稿" : "先上传封面"}</Button>
                   {selectedChannelId && Boolean(channelAccounts.data?.find((account) => account.id === selectedChannelId)?.capabilities.publish) && <Button danger disabled={!revision || ["publishing", "published"].includes(row.status)} loading={publishWechatDraft.isPending} onClick={() => revision && publishWechatDraft.mutate({ articleId: row.id, revisionId: revision.id })}>{row.status === "publishing" ? "发布中" : "提交发布"}</Button>}
                 </Space>;
               } },

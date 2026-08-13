@@ -1,4 +1,4 @@
-import { buildChannelTestPath, buildWechatThumbPath, type WechatDraftPayload } from "./contracts";
+﻿import { buildChannelTestPath, buildWechatThumbPath, type WechatDraftPayload } from "./contracts";
 export type User = {
   id: string;
   email: string;
@@ -491,3 +491,4 @@ if (!response.ok) {
   reviewArticle: (articleId: string, revisionId: string, decision: "approve" | "reject" | "request_changes", comment = "") =>
     request<Review>(`/api/v1/articles/${articleId}/revisions/${revisionId}/review`, { method: "POST", body: JSON.stringify({ decision, comment }) }),
 };
+
