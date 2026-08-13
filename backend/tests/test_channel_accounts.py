@@ -138,7 +138,7 @@ def test_draft_uses_selected_theme_without_changing_revision(monkeypatch, db):
     from content_ops.themes import ensure_builtin_themes
 
     ensure_builtin_themes(db)
-    theme = db.query(Theme).filter(Theme.slug == "swiss-blue-grid").one()
+    theme = db.query(Theme).filter(Theme.slug == "moyu-green").one()
     db.commit()
     received: list[str] = []
 
@@ -163,7 +163,8 @@ def test_draft_uses_selected_theme_without_changing_revision(monkeypatch, db):
     )
 
     assert result.remote_id == "theme-draft"
-    assert 'data-theme="swiss-blue-grid"' in received[0]
+    assert 'data-theme="moyu-green"' in received[0]
     assert "style=" in received[0]
     assert revision.content_markdown == "# 标题\n\n正文"
     assert result.response_json["theme_id"] == theme.id
+

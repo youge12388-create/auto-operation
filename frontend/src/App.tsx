@@ -350,7 +350,7 @@ function Dashboard({ currentUser }: { currentUser: User }) {
     onError: (error: Error) => message.error(error.message),
   });
   const startTopicWriting = useMutation({
-    mutationFn: api.startTopicWriting,
+    mutationFn: (id: string) => api.startTopicWriting(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["topics"] });
       queryClient.invalidateQueries({ queryKey: ["materials"] });

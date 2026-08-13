@@ -1,6 +1,7 @@
 """Add a persistent library of topic recommendation algorithms."""
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "0007_topic_algorithms"

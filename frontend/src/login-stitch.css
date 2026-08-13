@@ -1,5 +1,3 @@
-﻿@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Noto+Serif+SC:wght@400;500;700;900&family=Playfair+Display:wght@400;500;600;700&display=swap');
-
 .login-page {
   --stitch-bg: #0f1321;
   --stitch-card: rgba(9, 13, 32, .66);
@@ -78,19 +76,19 @@
 }
 .login-brand p { display: grid; gap: 4px; margin: 0; }
 .login-brand strong { color: #fff; font-size: 17px; letter-spacing: -.02em; }
-.login-brand small { color: var(--stitch-muted); font: 500 11px/1.2 "JetBrains Mono", monospace; letter-spacing: .08em; }
+.login-brand small { color: var(--stitch-muted); font: 500 11px/1.2 "PingFang SC","Microsoft YaHei",sans-serif; letter-spacing: .08em; }
 
 .login-thesis { width: min(650px, 100%); margin: auto 0; padding: 72px 0 52px; }
 .login-thesis h1 {
   margin: 0;
   color: var(--stitch-text);
-  font: 900 clamp(38px, 4.2vw, 62px)/1.2 "Noto Serif SC", "Songti SC", serif;
+  font: 800 clamp(36px, 4vw, 58px)/1.25 "PingFang SC","Microsoft YaHei","Noto Serif SC",serif;
   letter-spacing: -.05em;
   text-shadow: 0 12px 38px rgba(0, 0, 0, .36);
 }
 .login-thesis h1 em {
   color: transparent;
-  background: #a968ee;
+  background: linear-gradient(135deg, #2563eb, #06b6d4);
   -webkit-background-clip: text;
   background-clip: text;
   font-style: normal;
@@ -99,7 +97,7 @@
   max-width: 580px;
   margin: 30px 0 46px;
   padding-left: 24px;
-  border-left: 2px solid rgba(187, 195, 255, .34);
+  border-left: 2px solid rgba(59, 130, 246, .34);
   color: var(--stitch-muted);
   font-size: 16px;
   line-height: 1.8;
@@ -116,13 +114,13 @@
   border: 1px solid rgba(255,255,255,.08);
   border-radius: 8px;
   background: rgba(27, 31, 46, .58);
-  box-shadow: inset 0 1px rgba(187, 195, 255, .08);
+  box-shadow: inset 0 1px rgba(59, 130, 246, .08);
 }
 .login-capabilities article:nth-child(1) > span { color: var(--stitch-tertiary); }
 .login-capabilities p { display: grid; gap: 5px; margin: 0; }
 .login-capabilities strong { color: #fff; font-size: 14px; font-weight: 600; }
-.login-capabilities small { color: rgba(197, 197, 213, .78); font: 11px/1.55 "JetBrains Mono", monospace; }
-.login-story footer { color: rgba(197, 197, 213, .6); font: 11px/1.2 "JetBrains Mono", monospace; letter-spacing: .05em; }
+.login-capabilities small { color: rgba(197, 197, 213, .78); font: 500 11px/1.55 "PingFang SC","Microsoft YaHei",sans-serif; }
+.login-story footer { color: rgba(197, 197, 213, .6); font: 500 11px/1.2 "PingFang SC","Microsoft YaHei",sans-serif; letter-spacing: .06em; }
 
 .login-form-side {
   position: relative;
@@ -155,17 +153,17 @@
   height: 260px;
   content: "";
   border-radius: 50%;
-  background: rgba(187, 195, 255, .17);
+  background: rgba(59, 130, 246, .15);
   filter: blur(75px);
   pointer-events: none;
 }
 .login-form-card > * { position: relative; z-index: 1; }
-.login-eyebrow { color: var(--stitch-primary); font: 500 11px/1.2 "JetBrains Mono", monospace; letter-spacing: .2em; text-transform: uppercase; }
-.login-form-card h2 { margin: 17px 0 10px; color: #fff; font: 600 29px/1.25 "Playfair Display", "Noto Serif SC", serif; letter-spacing: -.02em; }
+.login-eyebrow { color: var(--stitch-primary); font: 700 11px/1.2 "PingFang SC","Microsoft YaHei",sans-serif; letter-spacing: .22em; text-transform: uppercase; }
+.login-form-card h2 { margin: 17px 0 10px; color: #fff; font: 700 29px/1.3 "PingFang SC","Microsoft YaHei","Noto Serif SC",serif; letter-spacing: -.02em; }
 .login-form-card > p { margin: 0 0 44px; color: var(--stitch-muted); font-size: 14px; }
 .login-form-card .ant-form-item { margin-bottom: 24px; }
 .login-form-card .ant-form-item-label { padding-bottom: 7px; }
-.login-form-card .ant-form-item-label > label { color: var(--stitch-muted); font: 500 11px/1.2 "JetBrains Mono", monospace; }
+.login-form-card .ant-form-item-label > label { color: var(--stitch-muted); font: 500 11px/1.2 "PingFang SC","Microsoft YaHei",sans-serif; }
 .login-form-card .ant-input-affix-wrapper {
   height: 52px;
   padding: 0 14px;
@@ -198,12 +196,8 @@
 .login-options .ant-checkbox-wrapper { color: var(--stitch-muted); font-size: 12px; }
 .login-options .ant-checkbox-inner { border-color: rgba(255,255,255,.2); background: rgba(17,21,52,.5); }
 .login-options .ant-checkbox-checked .ant-checkbox-inner { border-color: var(--stitch-primary); background: var(--stitch-primary); }
-.login-options button, .login-help a { color: var(--stitch-primary); }
-.login-options button:hover, .login-help a:hover { color: var(--stitch-tertiary); }
-.security-note { gap: 22px; margin-top: 28px; color: rgba(197,197,213,.7); font: 10px/1.2 "JetBrains Mono", monospace; }
+.security-note { gap: 22px; margin-top: 28px; color: rgba(197,197,213,.7); font: 500 10px/1.2 "PingFang SC","Microsoft YaHei",sans-serif; }
 .security-note i { background: rgba(255,255,255,.12); }
-.login-help { margin-top: 60px; padding-top: 26px; border-top-color: rgba(255,255,255,.08); color: rgba(197,197,213,.62); font: 10px/1.7 "JetBrains Mono", monospace; }
-.login-help small { margin-top: 18px; padding: 0; color: rgba(255,180,171,.56); background: transparent; font-size: 9px; }
 
 @media (max-width: 1100px) {
   .login-story { padding-inline: 5vw; }
@@ -222,7 +216,6 @@
   .login-form-side { min-height: auto; padding: 20px; }
   .login-form-card { min-height: 0; padding: 28px 22px; border-radius: 24px; }
   .login-form-card > p { margin-bottom: 32px; }
-  .login-help { margin-top: 42px; }
 }
 
 

@@ -30,7 +30,7 @@ def test_topic_evidence_events_and_audit_api(db):
     run_job(db, job.id, FakeProvider())
 
     topics = list_topics(None, None, db)
-    assert topics and topics[0].status == "accepted"
+    assert topics and topics[0].status == "writing"
     changed = decide_topic(topics[0].id, TopicDecision(decision="reject", comment="manual"), None, db)
     assert changed.status == "rejected"
 

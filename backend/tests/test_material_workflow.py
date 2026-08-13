@@ -82,6 +82,7 @@ def test_operator_selected_material_is_the_evidence_for_writing(db):
         },
     )
     strategy = Strategy(name="writing strategy", objective="Write from an explicitly selected material")
+    strategy.config_json = {"review_rules": {"human_review_required": True}}
     model = ModelConfig(provider="fake", name="material-translation-model")
     db.add_all([source, strategy, model])
     db.commit()
@@ -123,6 +124,7 @@ def test_multiple_retained_materials_are_frozen_into_the_evidence_package(db):
         for index in range(2)
     ]
     strategy = Strategy(name="multi-material strategy", objective="Use every selected source")
+    strategy.config_json = {"review_rules": {"human_review_required": True}}
     model = ModelConfig(provider="fake", name="multi-material-translation-model")
     db.add_all([*sources, strategy, model])
     db.commit()

@@ -1,6 +1,8 @@
 import { useMemo, useState, type ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Button, Checkbox, Input, Select, Switch, Table, Tabs, Upload } from "antd";
 import type { ColumnsType } from "antd/es/table";
+import { api } from "./api";
 import type {
   Article,
   AuditLog,
@@ -129,7 +131,7 @@ export function Sidebar({
     <aside className="console-sidebar">
       <div className="console-brand">
         <span className="brand-mark">A</span>
-        <span><strong>Candy AI</strong><small>智能内容助手</small></span>
+        <span><strong>Content Ops</strong><small>内容运营工作台</small></span>
       </div>
       <button type="button" className="sidebar-create" onClick={() => onNavigate("topics")}><Icon name="edit" size={16} />新建创作</button>
       <nav className="main-navigation" aria-label="主导航">
@@ -709,12 +711,28 @@ export function ReviewPublishPage({
   busy: boolean;
 }) {
   const [comment, setComment] = useState("");
+  const [aiPreview, setAiPreview] = useState<{ loading: boolean; html: string; error: string }>({ loading: false, html: "", error: "" });
   const pending = articles.filter((item) => ["waiting_review", "pending", "edited", "changes_requested"].includes(item.status));
   const draftArticles = articles.filter((item) => ["approved", "drafted", "wechat_draft", "publishing", "published"].includes(item.status));
   const selected = (tab === "pending" ? pending : draftArticles).find((item) => item.id === selectedId) ?? (tab === "pending" ? pending[0] : draftArticles[0]) ?? articles[0] ?? null;
   const revision = selected?.revisions[selected.revisions.length - 1];
   const selectedAccount = channels.find((item) => item.id === selectedChannelId);
   const selectedTheme = themes.find((item) => item.id === selectedThemeId);
+  const themePreview = useQuery({
+    queryKey: ["theme-preview", selected?.id, revision?.id, selectedThemeId],
+    queryFn: () => api.previewTheme(selected!.id, revision!.id, selectedThemeId),
+    enabled: Boolean(selected && revision && selectedThemeId),
+  });
+  const runAiPreview = async () => {
+    if (!selected || !revision || !selectedThemeId) return;
+    setAiPreview({ loading: true, html: "", error: "" });
+    try {
+      const result = await api.previewTheme(selected.id, revision.id, selectedThemeId, "ai");
+      setAiPreview({ loading: false, html: result.html, error: "" });
+    } catch (error) {
+      setAiPreview({ loading: false, html: "", error: error instanceof Error ? error.message : String(error) });
+    }
+  };
   const reviewMeta = selected?.review?.auto_result ?? {};
   const factCount = Array.isArray(selected?.evidence?.confirmed_facts) ? selected?.evidence.confirmed_facts.length : 0;
   return (
@@ -776,12 +794,13 @@ export function ReviewPublishPage({
             <label>摘要<Input.TextArea value={selected?.title || ""} readOnly rows={3} /></label>
           </PagePanel>
           <PagePanel className="wechat-preview">
-            <PanelTitle title="排版预览" action={<span className="panel-actions"><Button>更换主题</Button><Button>重新渲染</Button></span>} />
+            <PanelTitle title="排版预览" action={<span className="panel-actions"><Button size="small" loading={aiPreview.loading} disabled={!selectedThemeId || !selected || !revision} onClick={() => void runAiPreview()}>AI 排版预览</Button><Button>更换主题</Button><Button>重新渲染</Button></span>} />
             <Tabs items={[{ key: "mobile", label: "手机预览" }, { key: "desktop", label: "桌面预览" }]} />
             <div className="phone-frame">
               <div className="phone-status"><span>9:41</span><span>● ◔ ▰</span></div>
               <div className="wechat-titlebar"><Icon name="close" />{selectedAccount?.name || "公众号预览"}<Icon name="more" /></div>
-              <article className="wechat-article-preview"><h1>{selected?.title || "请选择文章"}</h1><p className="wechat-meta">AI内容团队　{selectedAccount?.name || "公众号"}　{formatDate(new Date().toISOString(), true)}</p><div dangerouslySetInnerHTML={{ __html: revision?.rendered_html || "<p>暂无可预览正文</p>" }} /></article>
+              <article className="wechat-article-preview"><h1>{selected?.title || "请选择文章"}</h1><p className="wechat-meta">AI内容团队　{selectedAccount?.name || "公众号"}　{formatDate(new Date().toISOString(), true)}</p>{aiPreview.html ? <div dangerouslySetInnerHTML={{ __html: aiPreview.html }} /> : aiPreview.loading ? <div className="wechat-preview-loading">AI 正在装配排版，请稍候…</div> : aiPreview.error ? <div className="wechat-preview-error">AI 排版失败：{aiPreview.error}</div> : selectedThemeId && revision ? themePreview.isLoading ? <div className="wechat-preview-loading">正在应用排版模板…</div> : themePreview.error ? <div className="wechat-preview-error">模板预览失败：{(themePreview.error as Error).message}</div> : <div dangerouslySetInnerHTML={{ __html: themePreview.data?.html || "<p>暂无可预览正文</p>" }} /> : <div dangerouslySetInnerHTML={{ __html: revision?.rendered_html || "<p>暂无可预览正文</p>" }} />}</article>
+
             </div>
           </PagePanel>
           <aside className="publish-status">
@@ -976,3 +995,6 @@ function skillName(skills: Skill[], strategy: Strategy, stage: string) {
   const id = (strategy.config.skill_by_stage as Record<string, string> | undefined)?.[stage];
   return skills.find((item) => item.id === id)?.name || "系统默认 Skill";
 }
+
+
+

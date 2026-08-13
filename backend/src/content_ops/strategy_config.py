@@ -2,15 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .models import ChannelAccount, ModelConfig, Skill, Source, Strategy, Theme
+from .models import ChannelAccount, MaterialCategory, ModelConfig, Skill, Source, Strategy, Theme
 
 OPTIONAL_STEPS = frozenset({"style", "rewrite"})
-MODEL_STAGES = ("writing", "style", "rewrite")
-SKILL_STAGES = ("writing", "style", "rewrite", "review")
-DEFAULT_WRITING_SKILL_NAME = "khazix-writer"
+MODEL_STAGES = ("writing", "style", "rewrite", "review", "render")
+SKILL_STAGES = ("writing", "style", "rewrite", "review", "render")
 TOPIC_SCORE_DIMENSIONS = ("heat", "timeliness", "reader_value", "strategy_fit")
 DEFAULT_TOPIC_WEIGHTS = {dimension: 25 for dimension in TOPIC_SCORE_DIMENSIONS}
 
@@ -28,11 +26,24 @@ def validate_strategy_config(config: dict[str, Any] | None) -> dict[str, Any]:
     if invalid_steps:
         raise StrategyConfigError(f"不能关闭核心步骤：{', '.join(invalid_steps)}")
     normalized["disabled_steps"] = sorted(set(disabled_steps))
+    render_mode = normalized.get("render_mode", "deterministic")
+    if render_mode not in ("deterministic", "ai"):
+        raise StrategyConfigError("render_mode 只能是 deterministic 或 ai")
+    normalized["render_mode"] = render_mode
+    if render_mode == "ai" and not normalized.get("theme_id"):
+        raise StrategyConfigError("AI 排版（render_mode=ai）必须配置 theme_id")
 
     source_ids = normalized.get("source_ids", [])
     if not isinstance(source_ids, list) or any(not isinstance(item, str) for item in source_ids):
         raise StrategyConfigError("source_ids 必须是字符串数组")
     normalized["source_ids"] = sorted(set(source_ids))
+
+    material_category_ids = normalized.get("material_category_ids", [])
+    if not isinstance(material_category_ids, list) or any(
+        not isinstance(item, str) for item in material_category_ids
+    ):
+        raise StrategyConfigError("material_category_ids 必须是字符串数组")
+    normalized["material_category_ids"] = sorted(set(material_category_ids))
 
     translate_foreign_sources = normalized.get("translate_foreign_sources", True)
     if not isinstance(translate_foreign_sources, bool):
@@ -43,6 +54,24 @@ def validate_strategy_config(config: dict[str, Any] | None) -> dict[str, Any]:
     if channel_account_id is not None and not isinstance(channel_account_id, str):
         raise StrategyConfigError("channel_account_id 必须是字符串")
     normalized["channel_account_id"] = channel_account_id
+
+    delivery_mode = normalized.get("delivery_mode", "local_draft")
+    if delivery_mode not in {"local_draft", "wechat_draft", "auto_publish"}:
+        raise StrategyConfigError("delivery_mode 必须是 local_draft、wechat_draft 或 auto_publish")
+    normalized["delivery_mode"] = delivery_mode
+
+    wechat_thumb_media_id = normalized.get("wechat_thumb_media_id")
+    if wechat_thumb_media_id is not None and (
+        not isinstance(wechat_thumb_media_id, str) or not wechat_thumb_media_id.strip()
+    ):
+        raise StrategyConfigError("wechat_thumb_media_id 必须是非空字符串")
+    normalized["wechat_thumb_media_id"] = (
+        wechat_thumb_media_id.strip() if isinstance(wechat_thumb_media_id, str) else None
+    )
+    if delivery_mode == "local_draft":
+        channel_account_id = None
+        normalized["channel_account_id"] = None
+        normalized["wechat_thumb_media_id"] = None
 
     theme_id = normalized.get("theme_id")
     if theme_id is not None and not isinstance(theme_id, str):
@@ -79,7 +108,14 @@ def validate_strategy_config(config: dict[str, Any] | None) -> dict[str, Any]:
         raise StrategyConfigError("review_rules 必须是对象")
     if "human_review_required" in review_rules and not isinstance(review_rules["human_review_required"], bool):
         raise StrategyConfigError("review_rules.human_review_required 必须是布尔值")
-    normalized["review_rules"] = {"human_review_required": True, **review_rules}
+    normalized["review_rules"] = {"human_review_required": False, **review_rules}
+    if delivery_mode == "auto_publish" and normalized["review_rules"]["human_review_required"]:
+        raise StrategyConfigError("自动正式发布必须关闭人工审核门，并使用自动质量审核")
+    if delivery_mode in {"wechat_draft", "auto_publish"}:
+        if not channel_account_id:
+            raise StrategyConfigError("微信交付模式必须选择公众号账号")
+        if not normalized["wechat_thumb_media_id"]:
+            raise StrategyConfigError("微信交付模式必须配置默认封面素材 ID")
 
     topic_algorithm = normalized.get("topic_algorithm", {})
     if not isinstance(topic_algorithm, dict):
@@ -117,13 +153,24 @@ def validate_strategy_references(db: Session, config: dict[str, Any]) -> None:
         if not source.enabled:
             raise StrategyConfigError(f"信息源已停用：{source_id}")
 
+    for category_id in config.get("material_category_ids", []):
+        category = db.get(MaterialCategory, category_id)
+        if category is None:
+            raise StrategyConfigError(f"素材分类不存在：{category_id}")
+        if not category.enabled:
+            raise StrategyConfigError(f"素材分类已停用：{category_id}")
+
     channel_account_id = config.get("channel_account_id")
-    if channel_account_id:
+    if config.get("delivery_mode") in {"wechat_draft", "auto_publish"} and channel_account_id:
         channel_account = db.get(ChannelAccount, channel_account_id)
         if channel_account is None:
             raise StrategyConfigError(f"发布账号不存在：{channel_account_id}")
         if not channel_account.enabled:
             raise StrategyConfigError(f"发布账号已停用：{channel_account_id}")
+        if config.get("delivery_mode") == "auto_publish" and not (
+            channel_account.capabilities_json or {}
+        ).get("publish"):
+            raise StrategyConfigError("所选公众号账号没有自动发布权限")
 
     theme_id = config.get("theme_id")
     if theme_id:
@@ -169,13 +216,6 @@ def skill_for_stage_config(db: Session, config: dict[str, Any], stage: str) -> S
         if skill and skill.status == "published" and skill.skill_type == stage:
             return skill
 
-    if stage == "writing":
-        return db.scalar(
-            select(Skill).where(
-                Skill.name == DEFAULT_WRITING_SKILL_NAME,
-                Skill.status == "published",
-            )
-        )
     return None
 
 

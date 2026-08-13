@@ -85,6 +85,19 @@ class Source(TimestampMixin, Base):
     items: Mapped[list[SourceItem]] = relationship(back_populates="source")
 
 
+class MaterialCategory(TimestampMixin, Base):
+    __tablename__ = "material_categories"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    name: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    description: Mapped[str] = mapped_column(String(500), default="")
+    classification_instructions: Mapped[str] = mapped_column(Text, default="")
+    enabled: Mapped[bool] = mapped_column(default=True)
+    is_builtin: Mapped[bool] = mapped_column(default=False)
+
+    items: Mapped[list["SourceItem"]] = relationship(back_populates="category")
+
+
 class SourceItem(TimestampMixin, Base):
     __tablename__ = "source_items"
     __table_args__ = (UniqueConstraint("source_id", "canonical_url", name="uq_source_item_url"),)
@@ -99,8 +112,15 @@ class SourceItem(TimestampMixin, Base):
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(String(32), default="verified")
     triage_status: Mapped[str] = mapped_column(String(32), default="inbox", index=True)
+    category_id: Mapped[str | None] = mapped_column(ForeignKey("material_categories.id"), index=True)
+    classification_status: Mapped[str] = mapped_column(String(32), default="pending", index=True)
+    classification_source: Mapped[str | None] = mapped_column(String(32))
+    classification_confidence: Mapped[float | None] = mapped_column(Float)
+    classification_reason: Mapped[str | None] = mapped_column(Text)
+    classification_error: Mapped[str | None] = mapped_column(Text)
 
     source: Mapped[Source] = relationship(back_populates="items")
+    category: Mapped[MaterialCategory | None] = relationship(back_populates="items")
 
 
 class Strategy(TimestampMixin, Base):

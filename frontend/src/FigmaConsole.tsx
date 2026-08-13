@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { message } from "antd";
-import { api, type Article, type ChannelAccount, type Job, type Material, type Model, type Skill, type Source, type Strategy, type Theme, type Topic, type User } from "./api";
+import { api, type Article, type ChannelAccount, type Job, type Material, type MaterialCategory, type Model, type Skill, type Source, type Strategy, type Theme, type Topic, type User } from "./api";
 import { Icon, type IconName, StatusPill } from "./design";
 import { StrategyPipelinePage } from "./StrategyPipelinePage";
 import { ArticleLibrary, hasFinalArticleBody, MaterialWorkspace, ReviewQueue, TopicRadar } from "./ContentFlowPages";
@@ -13,6 +13,13 @@ const COVER_PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/20
 type ModelProvider = "openai-compatible" | "anthropic" | "fake";
 type ModelVendor = "openai" | "deepseek" | "zhipu" | "anthropic" | "custom" | "fake";
 type ModelCatalog = { label: string; provider: ModelProvider; apiBaseUrl: string; models: Array<{ name: string; label: string }> };
+type RecommendedSource = { name: string; source_type: "rss" | "url"; url: string; description: string };
+
+const RECOMMENDED_SOURCES: RecommendedSource[] = [
+  { name: "OpenAI News", source_type: "url", url: "https://openai.com/news/", description: "Official product, research, and safety updates" },
+  { name: "Hugging Face Blog", source_type: "url", url: "https://huggingface.co/blog", description: "Open-source models, tools, and community practice" },
+  { name: "arXiv cs.AI", source_type: "rss", url: "https://export.arxiv.org/rss/cs.AI", description: "Latest artificial intelligence research papers" },
+];
 
 const MODEL_CATALOG: Record<ModelVendor, ModelCatalog> = {
   openai: {
@@ -91,7 +98,7 @@ function Empty({ title }: { title: string }) {
 
 function FigmaSidebar({ page, onNavigate, onCreate, onHelp, onLogout }: { page: Page; onNavigate: (page: Page) => void; onCreate: () => void; onHelp: () => void; onLogout: () => void }) {
   return <aside className="figma-sidebar">
-    <div className="figma-brand"><span className="figma-brand-mark"><Icon name="robot" size={23} /></span><span><strong>Candy AI</strong><small>智能内容助手</small></span></div>
+    <div className="figma-brand"><span className="figma-brand-mark"><Icon name="robot" size={23} /></span><span><strong>Content Ops</strong><small>内容运营工作台</small></span></div>
     <button className="figma-create" type="button" onClick={() => onNavigate("materials")}><Icon name="edit" size={16} />新建创作</button>
     <nav className="figma-nav" aria-label="主导航">{NAV.map((item) => <button key={item.key} type="button" aria-label={item.label} className={page === item.key ? "is-active" : ""} onClick={() => onNavigate(item.key)}><Icon name={item.icon} size={18} /><span>{item.label}</span></button>)}</nav>
     <div className="figma-sidebar-footer"><button type="button" onClick={onHelp}><Icon name="help" size={17} />帮助中心</button><button type="button" onClick={onLogout}><Icon name="close" size={17} />退出登录</button></div>
@@ -501,54 +508,96 @@ function ArticleEditor({ article, onBack, onSave, saving }: { article?: Article;
 
 type ModelFormPayload = { provider: ModelProvider; name: string; api_base_url: string; api_key: string };
 
-function SourceCenter({ sources, onAdd, onCollect, onDisable }: { sources: Source[]; onAdd: () => void; onCollect: (id: string) => Promise<void>; onDisable: (id: string) => Promise<void> }) {
+function sourceTypeLabel(type: string) {
+  if (type === "rss") return "RSS";
+  if (type === "url") return "网页";
+  if (type === "aihot_api") return "AI HOT";
+  if (type === "manual") return "手动";
+  return type.toUpperCase();
+}
+
+function SourceCenter({ sources, onAdd, onAddRecommended, onCollect, onUpdate, onDisable }: { sources: Source[]; onAdd: () => void; onAddRecommended: (source: RecommendedSource) => Promise<void>; onCollect: (id: string) => Promise<void>; onUpdate: (id: string, source: Source) => Promise<void>; onDisable: (id: string) => Promise<void> }) {
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [editing, setEditing] = useState<Source | null>(null);
+  const [form, setForm] = useState({ name: "", url: "" });
   const run = async (id: string, action: (id: string) => Promise<void>) => {
     setPendingId(id);
-    try {
-      await action(id);
-    } catch {
-      // The mutation reports the user-facing error.
-    } finally {
-      setPendingId(null);
-    }
+    try { await action(id); } catch { /* The mutation reports the user-facing error. */ } finally { setPendingId(null); }
   };
+  const edit = (source: Source) => {
+    setEditing(source);
+    setForm({ name: source.name, url: source.url });
+  };
+  const save = async () => {
+    if (!editing || !form.name.trim() || (editing.source_type !== "manual" && editing.source_type !== "aihot_api" && !form.url.trim())) return;
+    setPendingId(editing.id);
+    try {
+      await onUpdate(editing.id, { ...editing, name: form.name.trim(), url: form.url.trim(), enabled: editing.enabled });
+      setEditing(null);
+    } catch { /* The mutation reports the user-facing error. */ } finally { setPendingId(null); }
+  };
+  const restore = (source: Source) => onUpdate(source.id, { ...source, enabled: true });
 
   return (
     <main className="figma-page">
-      <div className="figma-page-heading">
-        <div>
-          <h1><span className="title-icon"><Icon name="link" size={22} /></span>信息源</h1>
-          <p>查看和管理你已经添加的采集入口，采集后的内容会进入素材池。</p>
-        </div>
-        <PillButton tone="pink" onClick={onAdd}>+ 添加信息源</PillButton>
-      </div>
-      <section className="model-page-section source-page-section">
-        {!sources.length ? (
-          <div className="model-empty-hint">还没有信息源。添加 RSS、网页 URL 或手动来源后，它们会出现在这里。</div>
-        ) : (
-          <div className="source-list">
-            {sources.map((source) => (
-              <div key={source.id} className="source-list-item">
-                <div className="source-list-main">
-                  <span className="model-list-provider">{source.source_type.toUpperCase()}</span>
-                  <strong>{source.name}</strong>
-                  <span className="source-list-url">{source.url || "手动录入"}</span>
-                </div>
-                <div className="source-list-actions">
-                  <StatusPill tone={source.enabled ? "green" : "neutral"}>{source.enabled ? "启用" : "已停用"}</StatusPill>
-                  {source.enabled && source.source_type !== "manual" && <button type="button" className="text-action" disabled={pendingId === source.id} onClick={() => void run(source.id, onCollect)}>{pendingId === source.id ? "采集中…" : "立即采集"}</button>}
-                  {source.enabled && <button type="button" className="text-action text-action--danger" disabled={pendingId === source.id} onClick={() => void run(source.id, onDisable)}>停用</button>}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+      <div className="figma-page-heading"><div><h1><span className="title-icon"><Icon name="link" size={22} /></span>采集设置</h1><p>信息源只负责把内容采集到素材池；自动化生产线从素材池分类中选材。</p></div><PillButton tone="pink" onClick={onAdd}>+ 添加信息源</PillButton></div>
+      <section className="recommended-sources" aria-label="推荐信息源">
+        <div><strong>优质推荐</strong><span>官方产品动态、开源社区与论文来源，点击后才会添加到你的信息源列表。</span></div>
+        <div className="recommended-source-list">{RECOMMENDED_SOURCES.map((source) => {
+          const exists = sources.some((item) => item.url.replace(/\/$/, "") === source.url.replace(/\/$/, ""));
+          return <button key={source.url} type="button" disabled={exists || pendingId === source.url} onClick={() => void run(source.url, () => onAddRecommended(source))}>
+            <strong>{source.name}</strong><small>{source.description}</small><em>{exists ? "已添加" : pendingId === source.url ? "添加中…" : "添加"}</em>
+          </button>;
+        })}</div>
       </section>
+      <section className="model-page-section source-page-section">
+        {!sources.length ? <div className="model-empty-hint">还没有信息源。添加 RSS、网页 URL 或手动来源后，它们会出现在这里。</div> : <div className="source-list">{sources.map((source) => <div key={source.id} className="source-list-item"><div className="source-list-main"><span className="model-list-provider">{sourceTypeLabel(source.source_type)}</span><strong>{source.name}</strong><span className="source-list-url">{source.url || "手动录入"}</span>{source.last_error && <small className="source-list-error">最近失败：{source.last_error}</small>}</div><div className="source-list-actions"><StatusPill tone={source.enabled ? "green" : "neutral"}>{source.enabled ? "启用" : "已停用"}</StatusPill><button type="button" className="text-action" onClick={() => edit(source)}>编辑</button>{source.enabled && source.source_type !== "manual" && <button type="button" className="text-action" disabled={pendingId === source.id} onClick={() => void run(source.id, onCollect)}>{pendingId === source.id ? "采集中…" : "立即采集"}</button>}{source.enabled ? <button type="button" className="text-action text-action--danger" disabled={pendingId === source.id} onClick={() => void run(source.id, onDisable)}>停用</button> : <button type="button" className="text-action" disabled={pendingId === source.id} onClick={() => void run(source.id, () => restore(source))}>恢复</button>}</div></div>)}</div>}
+      </section>
+      {editing && <div className="figma-modal-backdrop" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) setEditing(null); }}><section className="figma-modal" role="dialog" aria-modal="true" aria-label="编辑信息源"><button className="modal-close" type="button" aria-label="关闭" onClick={() => setEditing(null)}><Icon name="close" size={18} /></button><span className="eyebrow">COLLECTION SOURCE</span><h2>编辑信息源</h2><p>修改只影响后续采集，已经进入素材池的历史内容保持不变。</p><label>名称<input value={form.name} onChange={(event) => setForm((value) => ({ ...value, name: event.target.value }))} /></label>{editing.source_type !== "manual" && editing.source_type !== "aihot_api" && <label>{editing.source_type === "rss" ? "RSS 地址" : "网页地址"}<input type="url" value={form.url} onChange={(event) => setForm((value) => ({ ...value, url: event.target.value }))} /></label>}{editing.source_type === "aihot_api" && <label>分类<select value={String((editing.config?.category) || "")} onChange={(event) => setEditing({ ...editing, config: { ...(editing.config || {}), category: event.target.value || undefined } })}><option value="">全部分类</option><option value="ai-models">AI 模型</option><option value="ai-products">AI 产品</option><option value="industry">行业动态</option><option value="paper">论文</option><option value="tip">技巧</option></select></label>}<PillButton tone="pink" disabled={pendingId === editing.id} onClick={() => void save()}>{pendingId === editing.id ? "保存中…" : "保存修改"}</PillButton></section></div>}
     </main>
   );
 }
+type ChannelFormPayload = { name: string; app_id: string; app_secret: string; publish_enabled: boolean };
 
+function ChannelCenter({ accounts, onAdd, onUpdate, onTest, onDisable }: { accounts: ChannelAccount[]; onAdd: (payload: ChannelFormPayload) => Promise<void>; onUpdate: (id: string, payload: ChannelFormPayload & { enabled?: boolean }) => Promise<void>; onTest: (id: string) => void; onDisable: (id: string) => Promise<void> }) {
+  const emptyForm = (): ChannelFormPayload => ({ name: "", app_id: "", app_secret: "", publish_enabled: false });
+  const [form, setForm] = useState<ChannelFormPayload>(emptyForm());
+  const [editing, setEditing] = useState<ChannelAccount | null>(null);
+  const [open, setOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState("");
+  const close = () => { setOpen(false); setEditing(null); setForm(emptyForm()); setFormError(""); };
+  const startEdit = (account: ChannelAccount) => { setEditing(account); setForm({ name: account.name, app_id: "", app_secret: "", publish_enabled: Boolean(account.capabilities.publish) }); setFormError(""); setOpen(true); };
+  const submit = async () => {
+    if (!form.name.trim() || !form.app_id.trim() || !form.app_secret.trim()) { setFormError("请填写公众号名称、AppID 和 AppSecret。"); return; }
+    setSubmitting(true);
+    setFormError("");
+    try {
+      if (editing) await onUpdate(editing.id, { ...form, name: form.name.trim(), app_id: form.app_id.trim(), app_secret: form.app_secret.trim() });
+      else await onAdd({ ...form, name: form.name.trim(), app_id: form.app_id.trim(), app_secret: form.app_secret.trim() });
+      close();
+    } catch (error) { setFormError(error instanceof Error ? error.message : "保存失败，请检查凭证后重试。"); } finally { setSubmitting(false); }
+  };
+  const restore = async (account: ChannelAccount) => { setSubmitting(true); try { await onUpdate(account.id, { ...emptyForm(), name: account.name, enabled: true }); } finally { setSubmitting(false); } };
+
+  return <main className="figma-page model-center-page"><div className="figma-page-heading"><div><h1><span className="title-icon"><Icon name="send" size={22} /></span>公众号账号</h1><p>绑定公众号 AppID 与 AppSecret。凭证仅在保存时发送，页面不会回显；默认只允许创建草稿。</p></div><PillButton tone="pink" onClick={() => { setForm(emptyForm()); setEditing(null); setFormError(""); setOpen(true); }}>+ 绑定公众号</PillButton></div><section className="model-guidance"><strong>使用前请确认：</strong><span>已在微信公众平台配置服务器出口 IP 白名单；只有管理员可在绑定时打开正式发布权限。</span></section><section className="model-page-section">{!accounts.length ? <div className="model-empty-hint">还没有绑定公众号。绑定后可在策略与成稿库中选择它来创建草稿。</div> : <div className="model-list">{accounts.map((account) => { const readonly = account.config.source === "environment"; return <div key={account.id} className="model-list-item"><div className="model-list-main"><span className="model-list-provider">WECHAT</span><strong>{account.name}</strong><span className={account.has_credentials ? "model-list-key" : "model-list-key miss"}><Icon name={account.has_credentials ? "check" : "close"} size={10} />{account.has_credentials ? "凭证已配置" : "凭证未配置"}</span></div><div className="model-list-actions"><StatusPill tone={account.enabled ? "green" : "neutral"}>{account.enabled ? "启用中" : "已停用"}</StatusPill><StatusPill tone={account.capabilities.publish ? "green" : "blue"}>{account.capabilities.publish ? "可发布" : "仅草稿"}</StatusPill>{readonly ? <span className="account-readonly">环境配置</span> : <><button type="button" className="text-action" disabled={submitting} onClick={() => onTest(account.id)}>测试</button><button type="button" className="text-action" disabled={submitting} onClick={() => startEdit(account)}>编辑凭证</button>{account.enabled ? <button type="button" className="text-action text-action--danger" disabled={submitting} onClick={() => void onDisable(account.id)}>停用</button> : <button type="button" className="text-action" disabled={submitting} onClick={() => void restore(account)}>恢复</button>}</>}</div></div>; })}</div>}</section>{open && <div className="figma-modal-backdrop" onClick={(event) => { if (event.target === event.currentTarget && !submitting) close(); }}><div className="figma-modal model-modal"><button type="button" className="modal-close" disabled={submitting} onClick={close}><Icon name="close" size={14} /></button><h2>{editing ? "更新公众号凭证" : "绑定微信公众号"}</h2><p>{editing ? "重新填写 AppID 与 AppSecret 后才会更新凭证。" : "凭证将加密保存；建议先保留“仅草稿”权限，确认流程后再开启发布。"}</p><form onSubmit={(event) => { event.preventDefault(); void submit(); }}><label>公众号名称<input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="例如：品牌内容号" required /></label><label>AppID<input value={form.app_id} onChange={(event) => setForm((current) => ({ ...current, app_id: event.target.value }))} placeholder="wx..." required /></label><label>AppSecret<input type="password" value={form.app_secret} onChange={(event) => setForm((current) => ({ ...current, app_secret: event.target.value }))} placeholder="公众号 AppSecret" required /></label>{!editing && <label className="form-check"><input type="checkbox" checked={form.publish_enabled} onChange={(event) => setForm((current) => ({ ...current, publish_enabled: event.target.checked }))} />允许正式发布（仅管理员）</label>}{formError && <div className="form-error" role="alert">{formError}</div>}<div className="modal-form-actions"><PillButton type="button" onClick={close} disabled={submitting}>取消</PillButton><PillButton type="submit" tone="pink" disabled={submitting}>{submitting ? "保存中…" : editing ? "保存凭证" : "绑定公众号"}</PillButton></div></form></div></div>}</main>;
+}
+
+type UserFormPayload = { email: string; password: string; role: "admin" | "operator" | "reviewer" };
+
+function UserCenter({ users, onAdd }: { users: User[]; onAdd: (payload: UserFormPayload) => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState<UserFormPayload>({ email: "", password: "", role: "operator" });
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const close = () => { setOpen(false); setForm({ email: "", password: "", role: "operator" }); setError(""); };
+  const submit = async () => {
+    if (!form.email.trim() || form.password.length < 12) { setError("请填写有效邮箱，密码至少 12 位。"); return; }
+    setSubmitting(true); setError("");
+    try { await onAdd({ ...form, email: form.email.trim() }); close(); } catch (reason) { setError(reason instanceof Error ? reason.message : "添加用户失败。"); } finally { setSubmitting(false); }
+  };
+  return <main className="figma-page model-center-page"><div className="figma-page-heading"><div><h1><span className="title-icon"><Icon name="user" size={22} /></span>用户中心</h1><p>管理内部成员及其角色：管理员可管理配置与发布，运营可处理内容，审核员只处理审核流程。</p></div><PillButton tone="pink" onClick={() => setOpen(true)}>+ 添加用户</PillButton></div><section className="model-page-section">{!users.length ? <div className="model-empty-hint">暂无可管理用户。</div> : <div className="model-list">{users.map((user) => <div key={user.id} className="model-list-item"><div className="model-list-main"><span className="model-list-provider">{user.role}</span><strong>{user.email}</strong></div><div className="model-list-actions"><StatusPill tone={user.role === "admin" ? "green" : "blue"}>{user.role === "admin" ? "管理员" : user.role === "operator" ? "运营" : "审核"}</StatusPill></div></div>)}</div>}</section>{open && <div className="figma-modal-backdrop" onClick={(event) => { if (event.target === event.currentTarget && !submitting) close(); }}><div className="figma-modal model-modal"><button type="button" className="modal-close" disabled={submitting} onClick={close}><Icon name="close" size={14} /></button><h2>添加内部用户</h2><p>新用户将使用此邮箱和密码登录后台。</p><form onSubmit={(event) => { event.preventDefault(); void submit(); }}><label>邮箱<input type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} required /></label><label>初始密码<input type="password" minLength={12} value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} required /></label><label>角色<select value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value as UserFormPayload["role"] }))}><option value="operator">运营</option><option value="reviewer">审核</option><option value="admin">管理员</option></select></label>{error && <div className="form-error" role="alert">{error}</div>}<div className="modal-form-actions"><PillButton type="button" onClick={close} disabled={submitting}>取消</PillButton><PillButton type="submit" tone="pink" disabled={submitting}>{submitting ? "添加中…" : "添加用户"}</PillButton></div></form></div></div>}</main>;
+}
 function ModelCenter({ models, onAdd, onUpdate, onTest, onDelete }: { models: Model[]; onAdd: (p: ModelFormPayload) => Promise<void>; onUpdate: (id: string, p: Partial<ModelFormPayload> & { enabled?: boolean }) => Promise<void>; onTest: (id: string) => void; onDelete: (id: string) => Promise<void> }) {
   const defaultForm = (vendor: ModelVendor = "openai"): ModelFormPayload => {
     const catalog = MODEL_CATALOG[vendor];
@@ -763,7 +812,7 @@ export function FigmaConsole({ currentUser }: { currentUser: User }) {
   const [selectedMaterialId, setSelectedMaterialId] = useState<string | null>(null);
   const [selectedArticleId, setSelectedArticleId] = useState<string | null>(null);
   const [sourceOpen, setSourceOpen] = useState(false);
-  const [sourceType, setSourceType] = useState<"rss" | "url" | "manual">("rss");
+  const [sourceType, setSourceType] = useState<"rss" | "url" | "manual" | "aihot_api">("rss");
   const [topicOpen, setTopicOpen] = useState(false);
   const [topicTitle, setTopicTitle] = useState("");
   const [topicStrategyId, setTopicStrategyId] = useState("");
@@ -773,11 +822,13 @@ export function FigmaConsole({ currentUser }: { currentUser: User }) {
   const [thumbMediaId, setThumbMediaId] = useState("");
   const [coverPreviewUrl, setCoverPreviewUrl] = useState("");
   const [deliveryError, setDeliveryError] = useState("");
-  const [settingsTab, setSettingsTab] = useState<"strategy" | "sources" | "models">("strategy");
+  const [curationResult, setCurationResult] = useState<{ candidate_count: number; selected_count: number; selected_ids: string[]; selected_titles: string[]; message: string } | null>(null);
+  const [settingsTab, setSettingsTab] = useState<"strategy" | "sources" | "models" | "channels" | "users">("strategy");
   const [selectedStrategyId, setSelectedStrategyId] = useState<string | null>(null);
   const [creatingStrategy, setCreatingStrategy] = useState(false);
   const sources = useQuery({ queryKey: ["sources"], queryFn: api.sources });
   const materials = useQuery({ queryKey: ["materials"], queryFn: () => api.materials(), refetchInterval: 10000 });
+  const materialCategories = useQuery({ queryKey: ["material-categories"], queryFn: () => api.materialCategories(true) });
   const topics = useQuery({ queryKey: ["topics"], queryFn: api.topics, refetchInterval: 8000 });
   const articles = useQuery({ queryKey: ["articles"], queryFn: api.articles, refetchInterval: 8000 });
   const strategies = useQuery({ queryKey: ["strategies"], queryFn: api.strategies });
@@ -785,6 +836,7 @@ export function FigmaConsole({ currentUser }: { currentUser: User }) {
   const skills = useQuery({ queryKey: ["skills"], queryFn: api.skills });
   const themes = useQuery({ queryKey: ["themes"], queryFn: api.themes });
   const channels = useQuery({ queryKey: ["channel-accounts"], queryFn: api.channelAccounts });
+  const users = useQuery({ queryKey: ["users"], queryFn: api.users, enabled: currentUser.role === "admin" });
   const models = useQuery({ queryKey: ["models"], queryFn: api.models });
   const jobs = useQuery({ queryKey: ["jobs"], queryFn: api.jobs, refetchInterval: 5000 });
   const dashboard = useQuery({ queryKey: ["dashboard"], queryFn: api.dashboard });
@@ -793,16 +845,27 @@ export function FigmaConsole({ currentUser }: { currentUser: User }) {
   useEffect(() => { if (!selectedSkillId && skills.data?.[0]) setSelectedSkillId(skills.data[0].id); }, [selectedSkillId, skills.data]);
   useEffect(() => { if (!creatingStrategy && !selectedStrategyId && strategies.data?.[0]) setSelectedStrategyId(strategies.data[0].id); }, [creatingStrategy, selectedStrategyId, strategies.data]);
   const refresh = (...keys: string[]) => Promise.all(keys.map((key) => queryClient.invalidateQueries({ queryKey: [key] })));
-  const triage = useMutation({ mutationFn: (id: string) => api.triageMaterial(id, "ignore"), onSuccess: () => void refresh("materials"), onError: (error: Error) => message.error(error.message) });
+  const triage = useMutation({ mutationFn: ({ id, decision }: { id: string; decision: "save" | "ignore" | "reopen" }) => api.triageMaterial(id, decision), onSuccess: () => void refresh("materials"), onError: (error: Error) => message.error(error.message) });
+  const collectSources = useMutation({ mutationFn: async (ids: string[]) => { const results = await Promise.all(ids.map((id) => api.collectSource(id))); return results.reduce((total, result) => ({ count: total.count + result.count, classified: total.classified + result.classified_count, failed: total.failed + result.classification_failed_count }), { count: 0, classified: 0, failed: 0 }); }, onSuccess: (result) => { message.success(`采集完成：素材 ${result.count} 条，AI 已分类 ${result.classified} 条${result.failed ? `，${result.failed} 条分类待重试` : ""}`); void refresh("sources", "materials", "material-categories", "dashboard"); }, onError: (error: Error) => message.error(`采集失败：${error.message}`) });
+  const curateMaterials = useMutation({ mutationFn: (strategyId: string) => api.curateMaterials({ strategy_id: strategyId, limit: 12 }), onSuccess: (result) => { setCurationResult(result); message.success(result.message); void refresh("materials", "dashboard"); }, onError: (error: Error) => message.error(`AI 精选失败：${error.message}`) });
+  const classifyMaterials = useMutation({ mutationFn: (ids?: string[]) => api.classifyMaterials({ material_ids: ids || [], retry_failed: true }), onSuccess: (result) => { message.success(result.message); void refresh("materials", "material-categories"); }, onError: (error: Error) => message.error(`AI 分类失败：${error.message}`) });
+  const assignMaterialCategory = useMutation({ mutationFn: ({ id, categoryId }: { id: string; categoryId: string | null }) => api.assignMaterialCategory(id, categoryId), onSuccess: () => void refresh("materials", "material-categories"), onError: (error: Error) => message.error(error.message) });
+  const addMaterialCategory = useMutation({ mutationFn: (payload: { name: string; description?: string; classification_instructions?: string }) => api.addMaterialCategory(payload), onSuccess: () => { message.success("素材分类已添加"); void refresh("material-categories"); }, onError: (error: Error) => message.error(error.message) });
+  const updateMaterialCategory = useMutation({ mutationFn: ({ id, payload }: { id: string; payload: Partial<Pick<MaterialCategory, "name" | "description" | "classification_instructions" | "enabled">> }) => api.updateMaterialCategory(id, payload), onSuccess: () => { message.success("素材分类已更新"); void refresh("material-categories", "materials"); }, onError: (error: Error) => message.error(error.message) });
+  const disableMaterialCategory = useMutation({ mutationFn: api.disableMaterialCategory, onSuccess: () => { message.success("素材分类已停用，历史素材仍然保留"); void refresh("material-categories"); }, onError: (error: Error) => message.error(error.message) });
+  const restoreMaterialCategory = useMutation({ mutationFn: api.restoreMaterialCategory, onSuccess: () => { message.success("素材分类已恢复"); void refresh("material-categories"); }, onError: (error: Error) => message.error(error.message) });
   const createFromMaterials = useMutation({
-    mutationFn: async (payload: { materialIds: string[]; strategyId: string; title?: string }) => {
+    mutationFn: async (payload: { materialIds: string[]; strategyId: string; title?: string; skillId: string }) => {
       const topic = await api.createTopicFromMaterials({
         material_ids: payload.materialIds,
         strategy_id: payload.strategyId,
         title: payload.title,
       });
       await api.decideTopic(topic.id, "accept");
-      return api.startTopicWriting(topic.id);
+      const startPayload: { writing_skill_id?: string; disable_writing_skill?: boolean } = {};
+      if (payload.skillId === "none") startPayload.disable_writing_skill = true;
+      else if (payload.skillId) startPayload.writing_skill_id = payload.skillId;
+      return api.startTopicWriting(topic.id, startPayload);
     },
     onSuccess: () => {
       message.success("创作任务已启动，完成后会进入待审核");
@@ -826,12 +889,13 @@ export function FigmaConsole({ currentUser }: { currentUser: User }) {
   });
   const acceptTopic = useMutation({ mutationFn: async (topic: Topic) => { if (topic.status === "candidate") await api.decideTopic(topic.id, "accept"); return api.startTopicWriting(topic.id); }, onSuccess: () => { message.success("写作任务已进入后台，生成完成后会出现在待审核"); void refresh("topics", "jobs", "articles"); }, onError: (error: Error) => message.error(error.message) });
   const createTopic = useMutation({ mutationFn: () => api.addTopic({ title: topicTitle, strategy_id: topicStrategyId, rationale: "由运营人员手动创建" }), onSuccess: () => { setTopicOpen(false); setTopicTitle(""); void refresh("topics"); message.success("选题已创建"); }, onError: (error: Error) => message.error(error.message) });
-  const addSource = useMutation({ mutationFn: (payload: { name: string; source_type: "rss" | "url"; url: string }) => api.addSource(payload), onSuccess: () => { setSourceOpen(false); void refresh("sources", "dashboard"); message.success("信息源已添加"); }, onError: (error: Error) => message.error(error.message) });
-  const addManualMaterial = useMutation({ mutationFn: (payload: { title: string; content: string; source_name?: string }) => api.addManualMaterial(payload), onSuccess: () => { setSourceOpen(false); void refresh("sources", "materials", "dashboard"); message.success("手动素材已加入素材池"); }, onError: (error: Error) => message.error(error.message) });
+  const addSource = useMutation({ mutationFn: (payload: { name: string; source_type: "rss" | "url" | "aihot_api"; url?: string; category?: string }) => api.addSource({ name: payload.name, source_type: payload.source_type, url: payload.url || "", config: payload.category ? { category: payload.category } : {} }), onSuccess: () => { setSourceOpen(false); void refresh("sources", "dashboard"); message.success("信息源已添加"); }, onError: (error: Error) => message.error(error.message) });
+  const addRecommendedSource = useMutation({ mutationFn: (source: RecommendedSource) => api.addSource({ name: source.name, source_type: source.source_type, url: source.url }), onSuccess: () => { void refresh("sources", "dashboard"); message.success("推荐信息源已添加"); }, onError: (error: Error) => message.error(error.message) });  const addManualMaterial = useMutation({ mutationFn: (payload: { title: string; content: string; source_name?: string }) => api.addManualMaterial(payload), onSuccess: () => { setSourceOpen(false); void refresh("sources", "materials", "dashboard"); message.success("手动素材已加入素材池"); }, onError: (error: Error) => message.error(error.message) });
   const createTopicAlgorithm = useMutation({ mutationFn: api.addTopicAlgorithm, onSuccess: () => { void refresh("topic-algorithms"); message.success("选题算法已创建"); }, onError: (error: Error) => message.error(error.message) });
   const updateTopicAlgorithm = useMutation({ mutationFn: ({ id, payload }: { id: string; payload: Parameters<typeof api.updateTopicAlgorithm>[1] }) => api.updateTopicAlgorithm(id, payload), onSuccess: () => { void refresh("topic-algorithms"); message.success("选题算法已保存"); }, onError: (error: Error) => message.error(error.message) });
   const deleteTopicAlgorithm = useMutation({ mutationFn: api.deleteTopicAlgorithm, onSuccess: () => { void refresh("topic-algorithms"); message.success("选题算法已删除"); }, onError: (error: Error) => message.error(error.message) });
   const collectSource = useMutation({ mutationFn: api.collectSource, onSuccess: (result) => { message.success("已采集 " + result.count + " 条素材"); void refresh("sources", "materials"); }, onError: (error: Error) => message.error(error.message) });
+  const updateSource = useMutation({ mutationFn: ({ id, source }: { id: string; source: Source }) => api.updateSource(id, source), onSuccess: () => { message.success("信息源已更新"); void refresh("sources", "dashboard"); }, onError: (error: Error) => message.error(error.message) });
   const disableSource = useMutation({ mutationFn: api.disableSource, onSuccess: () => { message.success("信息源已停用"); void refresh("sources", "dashboard"); }, onError: (error: Error) => message.error(error.message) });
   const importSkill = useMutation({ mutationFn: api.importSkill, onSuccess: () => { void refresh("skills"); message.success("Skill 导入成功，请在已发布列表中选择"); }, onError: (error: Error) => message.error(error.message) });
   const publishSkill = useMutation({ mutationFn: api.publishSkill, onSuccess: () => { void refresh("skills"); message.success("Skill 已发布，现在可以切换使用"); }, onError: (error: Error) => message.error(error.message) });
@@ -839,8 +903,13 @@ export function FigmaConsole({ currentUser }: { currentUser: User }) {
   const updateModel = useMutation({ mutationFn: ({ id, p }: { id: string; p: Partial<ModelFormPayload> & { enabled?: boolean } }) => api.updateModel(id, { provider: p.provider, name: p.name, api_base_url: p.api_base_url, api_key: p.api_key || undefined, enabled: p.enabled }), onSuccess: () => { void refresh("models"); message.success("模型已更新"); }, onError: (error: Error) => message.error(error.message) });
   const testModel = useMutation({ mutationFn: api.testModel, onSuccess: (result) => result.ok ? message.success(result.message) : message.warning(result.message), onError: (error: Error) => message.error(error.message) });
   const deleteModel = useMutation({ mutationFn: api.deleteModel, onSuccess: () => { void refresh("models", "strategies"); message.success("模型已删除"); }, onError: (error: Error) => message.error(error.message) });
-  const saveStrategy = useMutation({ mutationFn: ({ id, payload }: { id?: string; payload: StrategySavePayload }) => id ? api.updateStrategy(id, { name: payload.name, objective: payload.objective, schedule: payload.schedule, automation_level: payload.automation_level, enabled: payload.enabled, config: payload.config }) : api.addStrategy({ name: payload.name, objective: payload.objective, schedule: payload.schedule, automation_level: payload.automation_level, enabled: payload.enabled, config: payload.config }), onSuccess: (result) => { void refresh("strategies"); setSelectedStrategyId(result.id); setCreatingStrategy(false); message.success("策略已保存"); }, onError: (error: Error) => message.error(error.message) });
-  const runStrategy = useMutation({ mutationFn: ({ id, combinationId }: { id: string; combinationId?: string }) => api.runStrategy(id, combinationId), onSuccess: () => { message.success("策略任务已启动"); void refresh("jobs", "articles"); }, onError: (error: Error) => message.error(error.message) });
+  const addChannel = useMutation({ mutationFn: api.addChannelAccount, onSuccess: () => { void refresh("channel-accounts"); message.success("公众号已绑定"); }, onError: (error: Error) => message.error(error.message) });
+  const updateChannel = useMutation({ mutationFn: ({ id, payload }: { id: string; payload: Parameters<typeof api.updateChannelAccount>[1] }) => api.updateChannelAccount(id, payload), onSuccess: () => { void refresh("channel-accounts"); message.success("公众号账号已更新"); }, onError: (error: Error) => message.error(error.message) });
+  const testChannel = useMutation({ mutationFn: api.testChannelAccount, onSuccess: (result) => result.connected ? message.success(result.message) : message.warning(result.message), onError: (error: Error) => message.error(error.message) });
+  const disableChannel = useMutation({ mutationFn: api.disableChannelAccount, onSuccess: () => { void refresh("channel-accounts"); message.success("公众号账号已停用"); }, onError: (error: Error) => message.error(error.message) });
+  const addUser = useMutation({ mutationFn: api.addUser, onSuccess: () => { void refresh("users"); message.success("用户已添加"); }, onError: (error: Error) => message.error(error.message) });  const saveStrategy = useMutation({ mutationFn: ({ id, payload }: { id?: string; payload: StrategySavePayload }) => id ? api.updateStrategy(id, { name: payload.name, objective: payload.objective, schedule: payload.schedule, automation_level: payload.automation_level, enabled: payload.enabled, config: payload.config }) : api.addStrategy({ name: payload.name, objective: payload.objective, schedule: payload.schedule, automation_level: payload.automation_level, enabled: payload.enabled, config: payload.config }), onSuccess: (result) => { void refresh("strategies"); setSelectedStrategyId(result.id); setCreatingStrategy(false); message.success("策略已保存"); }, onError: (error: Error) => message.error(error.message) });
+  const runStrategy = useMutation({ mutationFn: ({ id, combinationId }: { id: string; combinationId?: string }) => api.runStrategy(id, combinationId), onSuccess: () => { message.success("自动化任务已启动：将自动采集、分类、精选、选题、写作、审核并按交付模式处理"); void refresh("jobs", "articles", "materials", "topics"); }, onError: (error: Error) => message.error(error.message) });
+  const retryJob = useMutation({ mutationFn: api.retryJob, onSuccess: () => { message.success("任务已重新进入队列"); void refresh("jobs", "articles"); }, onError: (error: Error) => message.error(error.message) });
   const reviewArticle = useMutation({
     mutationFn: ({ article, decision }: { article: Article; decision: "approve" | "request_changes" }) => {
       const revision = article.revisions[article.revisions.length - 1];
@@ -863,7 +932,7 @@ export function FigmaConsole({ currentUser }: { currentUser: User }) {
   const saveRevision = useMutation({ mutationFn: ({ articleId, title, markdown }: { articleId: string; title: string; markdown: string }) => api.addRevision(articleId, markdown, title), onSuccess: () => { void refresh("articles", "jobs"); message.success("新版本已保存并送回待审核"); setPage("review"); }, onError: (error: Error) => message.error(error.message) });
   const archiveArticle = useMutation({ mutationFn: api.archiveArticle, onSuccess: () => { setSelectedArticleId(null); void refresh("articles", "dashboard"); message.success("文章已从本地成稿库归档" ); }, onError: (error: Error) => message.error(error.message) });
   const uploadThumb = useMutation({ mutationFn: (file: File) => { setDeliveryError(""); const blobUrl = URL.createObjectURL(file); setCoverPreviewUrl(blobUrl); return api.uploadWechatThumb(file, selectedChannelId || undefined); }, onSuccess: (result) => { setThumbMediaId(result.media_id); message.success("封面上传成功"); }, onError: (error: Error) => { setDeliveryError(error.message); message.error("封面上传失败，请查看交付设置中的处理方法"); } });
-  const createDraft = useMutation({ mutationFn: (article: Article) => { setDeliveryError(""); const revision = article.revisions[article.revisions.length - 1]; if (!revision) throw new Error("当前文章没有可发布版本"); return api.createWechatDraft(article.id, revision.id, { thumb_media_id: thumbMediaId, channel_account_id: selectedChannelId || undefined, theme_id: selectedThemeId || undefined }); }, onSuccess: () => { void refresh("articles", "publications"); message.success("微信草稿已创建"); }, onError: (error: Error) => { setDeliveryError(error.message); message.error("微信草稿创建失败，请查看交付设置中的处理方法"); } });
+  const createDraft = useMutation({ mutationFn: (article: Article) => { setDeliveryError(""); const revision = article.revisions[article.revisions.length - 1]; if (!revision) throw new Error("当前文章没有可发布版本"); const payload = { thumb_media_id: thumbMediaId, channel_account_id: selectedChannelId || undefined, theme_id: selectedThemeId || undefined }; return article.status === "wechat_draft" ? api.updateWechatDraft(article.id, revision.id, payload) : api.createWechatDraft(article.id, revision.id, payload); }, onSuccess: () => { void refresh("articles", "publications"); message.success("微信草稿已写入"); }, onError: (error: Error) => { setDeliveryError(error.message); message.error("微信草稿写入失败，请查看交付设置中的处理方法"); } });
   const publishDraft = useMutation({ mutationFn: (article: Article) => { const revision = article.revisions[article.revisions.length - 1]; if (!revision) throw new Error("当前文章没有可发布版本"); if (!selectedChannelId) throw new Error("请先选择发布账号"); return api.publishWechatDraft(article.id, revision.id, selectedChannelId); }, onSuccess: () => { void refresh("articles", "publications"); message.success("已提交微信发布"); }, onError: (error: Error) => message.error(error.message) });
   const search = (value: string) => { const term = value.trim().toLowerCase(); if (!term) return; const material = materials.data?.find((item) => item.title.toLowerCase().includes(term)); if (material) { setSelectedMaterialId(material.id); setPage("materials"); return; } const article = articles.data?.find((item) => item.title.toLowerCase().includes(term)); if (article) { setSelectedArticleId(article.id); setPage("review"); return; } message.info("没有找到匹配内容"); };
   const selectedMaterial = materials.data?.find((item) => item.id === selectedMaterialId);
@@ -897,9 +966,9 @@ export function FigmaConsole({ currentUser }: { currentUser: User }) {
   });
   const content = useMemo(() => {
     if (page === "dashboard") return <Dashboard materials={materials.data || []} topics={topics.data || []} articles={articles.data || []} jobs={jobs.data || []} sourcesCount={dashboard.data?.sources || 0} onNavigate={setPage} onOpenReview={(id) => { setSelectedArticleId(id); setPage("review"); }} />;
-    if (page === "materials") return <MaterialWorkspace materials={materials.data || []} strategies={strategies.data || []} creating={createFromMaterials.isPending} onCreate={(payload) => createFromMaterials.mutate(payload)} onAddSource={() => setSourceOpen(true)} />;
+    if (page === "materials") return <MaterialWorkspace materials={materials.data || []} categories={materialCategories.data || []} loadError={[materials.error, materialCategories.error].filter((error): error is Error => error instanceof Error).map((error) => error.message).join("；")} sources={sources.data || []} skills={skills.data || []} strategies={strategies.data || []} curationResult={curationResult} creating={createFromMaterials.isPending} onCreate={(payload) => createFromMaterials.mutate(payload)} onManageSources={() => { setSettingsTab("sources"); setPage("settings"); }} onCollect={(ids) => collectSources.mutate(ids)} collecting={collectSources.isPending} onCurate={(strategyId) => curateMaterials.mutate(strategyId)} curating={curateMaterials.isPending} onClassify={(ids) => classifyMaterials.mutate(ids)} classifying={classifyMaterials.isPending} onTriage={(id, decision) => triage.mutate({ id, decision })} onAssignCategory={(id, categoryId) => assignMaterialCategory.mutate({ id, categoryId })} onAddCategory={(payload) => addMaterialCategory.mutateAsync(payload)} onUpdateCategory={(id, payload) => updateMaterialCategory.mutateAsync({ id, payload })} onDisableCategory={(id) => disableMaterialCategory.mutateAsync(id)} onRestoreCategory={(id) => restoreMaterialCategory.mutateAsync(id)} />;
     if (page === "topics") return <TopicRadar topics={topics.data || []} strategies={strategies.data || []} algorithms={topicAlgorithms.data || []} scanning={scanTopics.isPending} writing={acceptTopic.isPending} managingAlgorithms={createTopicAlgorithm.isPending || updateTopicAlgorithm.isPending || deleteTopicAlgorithm.isPending} onScan={(strategyId, algorithmId) => scanTopics.mutate({ strategyId, algorithmId })} onWrite={(topic) => acceptTopic.mutate(topic)} onDismiss={(topic) => { void api.decideTopic(topic.id, "reject").then(() => refresh("topics", "materials")).catch((error: Error) => message.error(error.message)); }} onSaveMaterials={(topic) => saveTopicMaterials.mutate(topic)} onCreateAlgorithm={(payload) => createTopicAlgorithm.mutateAsync(payload)} onUpdateAlgorithm={(id, payload) => updateTopicAlgorithm.mutateAsync({ id, payload })} onDeleteAlgorithm={(id) => deleteTopicAlgorithm.mutateAsync(id)} />;
-    if (page === "review") return <ReviewQueue articles={articles.data || []} selectedId={selectedArticleId} pending={reviewArticle.isPending} onSelect={setSelectedArticleId} onApprove={(article) => reviewArticle.mutate({ article, decision: "approve" })} onChanges={(article) => reviewArticle.mutate({ article, decision: "request_changes" })} onEdit={(id) => { setSelectedArticleId(id); setEditorReturnPage("review"); setPage("editor"); }} />;
+    if (page === "review") return <ReviewQueue articles={articles.data || []} jobs={jobs.data || []} selectedId={selectedArticleId} pending={reviewArticle.isPending} retrying={retryJob.isPending} onSelect={setSelectedArticleId} onApprove={(article) => reviewArticle.mutate({ article, decision: "approve" })} onChanges={(article) => reviewArticle.mutate({ article, decision: "request_changes" })} onEdit={(id) => { setSelectedArticleId(id); setEditorReturnPage("review"); setPage("editor"); }} onRetry={(id) => retryJob.mutate(id)} />;
     if (page === "library") return <ArticleLibrary articles={articles.data || []} selectedId={selectedArticleId} themes={themes.data || []} channels={channels.data || []} selectedThemeId={selectedThemeId} selectedChannelId={selectedChannelId} thumbMediaId={thumbMediaId} coverPreviewUrl={coverPreviewUrl} themePreviewHtml={themePreview.data?.html || ""} themePreviewLoading={themePreview.isLoading} themePreviewError={themePreview.error instanceof Error ? themePreview.error.message : ""} pending={createDraft.isPending || uploadThumb.isPending || archiveArticle.isPending} deliveryError={deliveryError} onSelect={(id) => { setSelectedArticleId(id); setDeliveryError(""); }} onEdit={(id) => { setSelectedArticleId(id); setEditorReturnPage("library"); setPage("editor"); }} onArchive={(article) => archiveArticle.mutate(article.id)} onThemeChange={setSelectedThemeId} onChannelChange={(id) => { setSelectedChannelId(id); setThumbMediaId(""); setDeliveryError(""); }} onUpload={(file) => uploadThumb.mutate(file)} onDraft={(article) => createDraft.mutate(article)} />;
     if (page === "editor") return <ArticleEditor article={selectedArticle} onBack={() => setPage(editorReturnPage)} onSave={(articleId, title, markdown) => saveRevision.mutate({ articleId, title, markdown })} saving={saveRevision.isPending} />;
     if (page === "settings") return (
@@ -909,17 +978,22 @@ export function FigmaConsole({ currentUser }: { currentUser: User }) {
             <button className={settingsTab === "strategy" ? "is-active" : ""} type="button" onClick={() => setSettingsTab("strategy")}>自动化生产线</button>
             <button className={settingsTab === "sources" ? "is-active" : ""} type="button" onClick={() => setSettingsTab("sources")}>信息源 <b>{sources.data?.length || 0}</b></button>
             <button className={settingsTab === "models" ? "is-active" : ""} type="button" onClick={() => setSettingsTab("models")}>模型中心 <b>{models.data?.length || 0}</b></button>
+            <button className={settingsTab === "channels" ? "is-active" : ""} type="button" onClick={() => setSettingsTab("channels")}>公众号账号 <b>{channels.data?.length || 0}</b></button>
+            {currentUser.role === "admin" && <button className={settingsTab === "users" ? "is-active" : ""} type="button" onClick={() => setSettingsTab("users")}>用户中心 <b>{users.data?.length || 0}</b></button>}
           </div>
         </div>
         {settingsTab === "strategy" ? (
-          <StrategyPipelinePage strategies={strategies.data || []} selectedId={creatingStrategy ? null : selectedStrategyId} onSelect={(id) => { setCreatingStrategy(false); setSelectedStrategyId(id); }} onNew={() => { setCreatingStrategy(true); setSelectedStrategyId(null); }} sources={sources.data || []} skills={skills.data || []} themes={themes.data || []} models={models.data || []} onSave={(id, payload) => saveStrategy.mutateAsync({ id, payload })} onRun={(id, combinationId) => runStrategy.mutateAsync({ id, combinationId })} onAddSource={() => setSourceOpen(true)} />
+          <StrategyPipelinePage strategies={strategies.data || []} selectedId={creatingStrategy ? null : selectedStrategyId} onSelect={(id) => { setCreatingStrategy(false); setSelectedStrategyId(id); }} onNew={() => { setCreatingStrategy(true); setSelectedStrategyId(null); }} categories={materialCategories.data || []} skills={skills.data || []} themes={themes.data || []} models={models.data || []} channels={channels.data || []} onSave={(id, payload) => saveStrategy.mutateAsync({ id, payload })} onRun={(id, combinationId) => runStrategy.mutateAsync({ id, combinationId })} onManageMaterials={() => setPage("materials")} onImportSkill={async (file) => { await importSkill.mutateAsync(file); }} importingSkill={importSkill.isPending} />
         ) : settingsTab === "sources" ? (
-          <SourceCenter sources={sources.data || []} onAdd={() => setSourceOpen(true)} onCollect={async (id) => { await collectSource.mutateAsync(id); }} onDisable={async (id) => { await disableSource.mutateAsync(id); }} />
+          <SourceCenter sources={sources.data || []} onAdd={() => setSourceOpen(true)} onAddRecommended={async (source) => { await addRecommendedSource.mutateAsync(source); }} onCollect={async (id) => { await collectSource.mutateAsync(id); }} onUpdate={async (id, source) => { await updateSource.mutateAsync({ id, source }); }} onDisable={async (id) => { await disableSource.mutateAsync(id); }} />
+        ) : settingsTab === "models" ? (          <ModelCenter models={models.data || []} onAdd={async (p) => { await addModel.mutateAsync(p); }} onUpdate={async (id, p) => { await updateModel.mutateAsync({ id, p }); }} onTest={(id) => testModel.mutate(id)} onDelete={async (id) => { await deleteModel.mutateAsync(id); }} />
+        ) : settingsTab === "channels" ? (
+          <ChannelCenter accounts={channels.data || []} onAdd={async (payload) => { await addChannel.mutateAsync(payload); }} onUpdate={async (id, { name, app_id, app_secret, enabled }) => { await updateChannel.mutateAsync({ id, payload: { name, app_id, app_secret, enabled } }); }} onTest={(id) => testChannel.mutate(id)} onDisable={async (id) => { await disableChannel.mutateAsync(id); }} />
         ) : (
-          <ModelCenter models={models.data || []} onAdd={async (p) => { await addModel.mutateAsync(p); }} onUpdate={async (id, p) => { await updateModel.mutateAsync({ id, p }); }} onTest={(id) => testModel.mutate(id)} onDelete={async (id) => { await deleteModel.mutateAsync(id); }} />
+          <UserCenter users={users.data || []} onAdd={async (payload) => { await addUser.mutateAsync(payload); }} />
         )}
       </div>
     );
-  }, [acceptTopic, archiveArticle, articles.data, channels.data, coverPreviewUrl, createDraft, createFromMaterials, dashboard.data, deliveryError, editorReturnPage, jobs.data, materials.data, models.data, page, publishDraft, reviewArticle, saveTopicMaterials, scanTopics, selectedArticleId, selectedChannelId, selectedMaterialId, selectedSkillId, selectedStrategyId, selectedThemeId, settingsTab, skills.data, sources.data, sourceType, strategies.data, themes.data, themePreview.data?.html, thumbMediaId, topicAlgorithms.data, topics.data, triage, updateTopicAlgorithm, uploadThumb]);
-  return <div className="figma-console"><FigmaSidebar page={page} onNavigate={setPage} onCreate={() => { setPage("topics"); setTopicOpen(true); }} onHelp={() => message.info("帮助中心：先筛选素材，再确认选题、配置策略并审核发布。")} onLogout={() => { void api.logout().then(() => window.location.reload()).catch((error: Error) => message.error(error.message)); }} /><div className="figma-main"><FigmaTopbar page={page} user={currentUser} notificationCount={(jobs.data || []).filter((item) => item.status.startsWith("failed") || item.status === "waiting_review").length} onSearch={search} onLogout={() => { void api.logout().then(() => window.location.reload()).catch((error: Error) => message.error(error.message)); }} />{content}</div>{(sourceOpen || topicOpen) && <div className="figma-modal-backdrop"><div className="figma-modal"><button className="modal-close" type="button" aria-label="关闭" onClick={() => { setSourceOpen(false); setTopicOpen(false); }}><Icon name="close" size={18} /></button>{sourceOpen ? <><span className="eyebrow">SOURCE</span><h2>{sourceType === "manual" ? "粘贴手动素材" : "添加信息源"}</h2><p>{sourceType === "manual" ? "直接粘贴一条素材，保存后立即进入素材池，无需再等待采集。" : sourceType === "rss" ? "添加一个 RSS 订阅地址，系统会按生产线的频率采集新内容。" : "添加一个网页或栏目页地址，系统会扫描页面正文并送入待筛选素材。"}</p><form onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); if (sourceType === "manual") { const title = String(form.get("title") || "").trim(); const content = String(form.get("content") || "").trim(); const sourceName = String(form.get("source_name") || "手动录入").trim(); if (!title || !content) { message.error("请填写素材标题和正文。"); return; } addManualMaterial.mutate({ title, content, source_name: sourceName || "手动录入" }); return; } const name = String(form.get("name") || "").trim(); const url = String(form.get("url") || "").trim(); if (!name || !url) { message.error("请填写信息源名称和地址。"); return; } addSource.mutate({ name, source_type: sourceType, url }); }}><label>类型<select value={sourceType} onChange={(event) => setSourceType(event.target.value as "rss" | "url" | "manual")}><option value="rss">RSS 订阅</option><option value="url">网页 URL</option><option value="manual">手动粘贴素材</option></select></label>{sourceType === "manual" ? <><label>素材标题<input name="title" required placeholder="这条素材讲什么？" /></label><label>素材正文<textarea name="content" required placeholder="粘贴完整正文、摘录或你的想法…" /></label><label>来源标签（可选）<input name="source_name" placeholder="例如：我的观察" /></label></> : <><label>信息源名称<input name="name" required placeholder={sourceType === "rss" ? "例如：36氪 RSS" : "例如：MIT Technology Review"} /></label><label>{sourceType === "rss" ? "RSS 地址" : "网页地址"}<input name="url" type="url" required placeholder="https://..." /></label></>}<PillButton type="submit" tone="pink">{sourceType === "manual" ? "加入素材池" : "添加信息源"}</PillButton></form></> : <><span className="eyebrow">NEW TOPIC</span><h2>创建候选选题</h2><p>先确认选题，再进入 AI 创作流程。</p><form onSubmit={(event) => { event.preventDefault(); createTopic.mutate(); }}><label>选题标题<input value={topicTitle} onChange={(event) => setTopicTitle(event.target.value)} required placeholder="输入一个值得创作的选题" /></label><label>所属策略<select value={topicStrategyId} onChange={(event) => setTopicStrategyId(event.target.value)} required><option value="">请选择策略</option>{(strategies.data || []).map((strategy) => <option key={strategy.id} value={strategy.id}>{strategy.name}</option>)}</select></label><PillButton type="submit" tone="pink">创建候选选题</PillButton></form></>}</div></div>}{selectedMaterial && null}</div>;
+  }, [acceptTopic, archiveArticle, articles.data, channels.data, coverPreviewUrl, createDraft, createFromMaterials, dashboard.data, deliveryError, editorReturnPage, jobs.data, materialCategories.data, materialCategories.error, materials.data, materials.error, models.data, page, publishDraft, reviewArticle, saveTopicMaterials, scanTopics, selectedArticleId, selectedChannelId, selectedMaterialId, selectedSkillId, selectedStrategyId, selectedThemeId, settingsTab, skills.data, sources.data, sourceType, strategies.data, themes.data, themePreview.data?.html, thumbMediaId, topicAlgorithms.data, topics.data, triage, updateTopicAlgorithm, users.data, updateSource, uploadThumb, collectSources, curateMaterials, classifyMaterials, assignMaterialCategory, addMaterialCategory, updateMaterialCategory, disableMaterialCategory, restoreMaterialCategory, retryJob]);
+  return <div className="figma-console"><FigmaSidebar page={page} onNavigate={setPage} onCreate={() => { setPage("topics"); setTopicOpen(true); }} onHelp={() => message.info("帮助中心：先筛选素材，再确认选题、配置策略并审核发布。")} onLogout={() => { void api.logout().then(() => window.location.reload()).catch((error: Error) => message.error(error.message)); }} /><div className="figma-main"><FigmaTopbar page={page} user={currentUser} notificationCount={(jobs.data || []).filter((item) => item.status.startsWith("failed") || item.status === "waiting_review").length} onSearch={search} onLogout={() => { void api.logout().then(() => window.location.reload()).catch((error: Error) => message.error(error.message)); }} />{content}</div>{(sourceOpen || topicOpen) && <div className="figma-modal-backdrop"><div className="figma-modal"><button className="modal-close" type="button" aria-label="关闭" onClick={() => { setSourceOpen(false); setTopicOpen(false); }}><Icon name="close" size={18} /></button>{sourceOpen ? <><span className="eyebrow">SOURCE</span><h2>{sourceType === "manual" ? "粘贴手动素材" : "添加信息源"}</h2><p>{sourceType === "manual" ? "直接粘贴一条素材，保存后立即进入素材池，无需再等待采集。" : sourceType === "rss" ? "添加一个 RSS 订阅地址，系统会按生产线的频率采集新内容。" : sourceType === "aihot_api" ? "接入 AI HOT 最近 24 小时精选资讯，按官方分类自动入库。" : "添加一个网页或栏目页地址，系统会扫描页面正文并送入待筛选素材。"}</p><form onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); if (sourceType === "manual") { const title = String(form.get("title") || "").trim(); const content = String(form.get("content") || "").trim(); const sourceName = String(form.get("source_name") || "手动录入").trim(); if (!title || !content) { message.error("请填写素材标题和正文。"); return; } addManualMaterial.mutate({ title, content, source_name: sourceName || "手动录入" }); return; } const name = String(form.get("name") || "").trim(); const url = String(form.get("url") || "").trim(); const category = String(form.get("category") || "").trim() || undefined; if (!name || (sourceType !== "aihot_api" && !url)) { message.error(sourceType === "aihot_api" ? "请填写信息源名称。" : "请填写信息源名称和地址。"); return; } addSource.mutate({ name, source_type: sourceType, url, category }); }}><label>类型<select value={sourceType} onChange={(event) => setSourceType(event.target.value as "rss" | "url" | "manual" | "aihot_api")}><option value="rss">RSS 订阅</option><option value="url">网页 URL</option><option value="aihot_api">AI HOT API（24h 精选）</option><option value="manual">手动粘贴素材</option></select></label>{sourceType === "manual" ? <><label>素材标题<input name="title" required placeholder="这条素材讲什么？" /></label><label>素材正文<textarea name="content" required placeholder="粘贴完整正文、摘录或你的想法…" /></label><label>来源标签（可选）<input name="source_name" placeholder="例如：我的观察" /></label></> : sourceType === "aihot_api" ? <><label>信息源名称<input name="name" required placeholder="例如：AI HOT 24h 精选" /></label><label>分类（可选）<select name="category"><option value="">全部分类</option><option value="ai-models">AI 模型</option><option value="ai-products">AI 产品</option><option value="industry">行业动态</option><option value="paper">论文</option><option value="tip">技巧</option></select></label></> : <><label>信息源名称<input name="name" required placeholder={sourceType === "rss" ? "例如：36氪 RSS" : "例如：MIT Technology Review"} /></label><label>{sourceType === "rss" ? "RSS 地址" : "网页地址"}<input name="url" type="url" required placeholder="https://..." /></label></>}<PillButton type="submit" tone="pink">{sourceType === "manual" ? "加入素材池" : "添加信息源"}</PillButton></form></> : <><span className="eyebrow">NEW TOPIC</span><h2>创建候选选题</h2><p>先确认选题，再进入 AI 创作流程。</p><form onSubmit={(event) => { event.preventDefault(); createTopic.mutate(); }}><label>选题标题<input value={topicTitle} onChange={(event) => setTopicTitle(event.target.value)} required placeholder="输入一个值得创作的选题" /></label><label>所属策略<select value={topicStrategyId} onChange={(event) => setTopicStrategyId(event.target.value)} required><option value="">请选择策略</option>{(strategies.data || []).map((strategy) => <option key={strategy.id} value={strategy.id}>{strategy.name}</option>)}</select></label><PillButton type="submit" tone="pink">创建候选选题</PillButton></form></>}</div></div>}{selectedMaterial && null}</div>;
 }

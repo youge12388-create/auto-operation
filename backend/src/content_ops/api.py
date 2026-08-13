@@ -6,6 +6,7 @@ import json
 import re
 import time
 from datetime import datetime, timezone
+from typing import Any
 from uuid import uuid4
 
 from fastapi import (
@@ -27,6 +28,8 @@ from sqlalchemy.orm import Session
 
 from .db import get_db
 from .ingestion import collect_source
+from .material_classification import classify_materials as run_material_classification
+from .material_curation import curate_materials as run_material_curation
 from .models import (
     Article,
     ArticleRevision,
@@ -36,6 +39,7 @@ from .models import (
     Job,
     JobEvent,
     JobStep,
+    MaterialCategory,
     ModelConfig,
     Publication,
     Review,
@@ -55,6 +59,7 @@ from .models import (
 )
 from .providers import CompletionRequest, provider_for
 from .queueing import notify_wake
+from .scheduler import normalize_schedule
 from .schemas import (
     ArticleRead,
     ArticleRevisionCreate,
@@ -73,6 +78,14 @@ from .schemas import (
     LoginRequest,
     ManualMaterialCreate,
     MaterialBatchTopicCreate,
+    MaterialCategoryAssign,
+    MaterialCategoryCreate,
+    MaterialCategoryRead,
+    MaterialCategoryUpdate,
+    MaterialClassifyRead,
+    MaterialClassifyRequest,
+    MaterialCurateRead,
+    MaterialCurateRequest,
     MaterialDetailRead,
     MaterialRead,
     MaterialTopicCreate,
@@ -109,6 +122,7 @@ from .schemas import (
     TopicRead,
     TopicScanRequest,
     TopicScoreRead,
+    TopicStartWriting,
     UserCreate,
     UserRead,
     WechatConnectionRead,
@@ -129,7 +143,7 @@ from .security import (
 from .settings import get_settings
 from .skills import SkillPackageError, validate_skill_package
 from .strategy_combinations import validate_strategy_definition, validate_strategy_definition_references
-from .strategy_config import StrategyConfigError
+from .strategy_config import StrategyConfigError, model_id_for_stage
 from .themes import ensure_builtin_themes, render_revision
 from .topic_algorithms import (
     ensure_builtin_topic_algorithm,
@@ -166,6 +180,16 @@ app.add_middleware(
 JOB_PRIORITY_MIGRATION_DETAIL = (
     "数据库结构尚未升级：缺少 automation_jobs.priority，请先应用 Alembic 迁移 0005_job_priority。"
 )
+MATERIAL_CATEGORY_MIGRATION_DETAIL = (
+    "数据库结构尚未升级：缺少素材分类字段，请先备份数据库并应用 Alembic 迁移 0008_material_categories。"
+)
+
+
+def raise_material_schema_error(exc: OperationalError) -> None:
+    detail = str(exc)
+    if "source_items.category_id" in detail or "source_items.classification_" in detail:
+        raise HTTPException(status_code=503, detail=MATERIAL_CATEGORY_MIGRATION_DETAIL) from exc
+    raise exc
 
 
 def raise_job_schema_error(exc: OperationalError) -> None:
@@ -202,6 +226,13 @@ def material_read(item: SourceItem, include_content: bool = False) -> MaterialRe
         "published_at": item.published_at,
         "created_at": item.created_at,
         "triage_status": item.triage_status,
+        "category_id": item.category_id,
+        "category_name": item.category.name if item.category is not None else None,
+        "classification_status": item.classification_status,
+        "classification_source": item.classification_source,
+        "classification_confidence": item.classification_confidence,
+        "classification_reason": item.classification_reason,
+        "classification_error": item.classification_error,
     }
     if include_content:
         return MaterialDetailRead(**values, content=item.content)
@@ -654,6 +685,130 @@ def disable_source(
     return source_read(source)
 
 
+def material_category_read(db: Session, category: MaterialCategory) -> MaterialCategoryRead:
+    try:
+        material_count = db.scalar(
+            select(func.count()).select_from(SourceItem).where(SourceItem.category_id == category.id)
+        ) or 0
+    except OperationalError as exc:
+        raise_material_schema_error(exc)
+        raise
+    return MaterialCategoryRead(
+        id=category.id,
+        name=category.name,
+        description=category.description,
+        classification_instructions=category.classification_instructions,
+        enabled=category.enabled,
+        is_builtin=category.is_builtin,
+        material_count=material_count,
+        created_at=category.created_at,
+        updated_at=category.updated_at,
+    )
+
+
+@app.get("/api/v1/material-categories", response_model=list[MaterialCategoryRead])
+def list_material_categories(
+    include_disabled: bool = True,
+    _: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> list[MaterialCategoryRead]:
+    query = select(MaterialCategory)
+    if not include_disabled:
+        query = query.where(MaterialCategory.enabled.is_(True))
+    categories = db.scalars(query.order_by(MaterialCategory.enabled.desc(), MaterialCategory.name)).all()
+    return [material_category_read(db, category) for category in categories]
+
+
+@app.post("/api/v1/material-categories", response_model=MaterialCategoryRead)
+def create_material_category(
+    payload: MaterialCategoryCreate,
+    user: User = Depends(require_roles("admin", "operator")),
+    db: Session = Depends(get_db),
+) -> MaterialCategoryRead:
+    name = payload.name.strip()
+    duplicate = db.scalar(select(MaterialCategory).where(func.lower(MaterialCategory.name) == name.lower()))
+    if duplicate is not None:
+        raise HTTPException(status_code=409, detail="素材分类名称已存在")
+    category = MaterialCategory(
+        name=name,
+        description=payload.description.strip(),
+        classification_instructions=payload.classification_instructions.strip(),
+        enabled=payload.enabled,
+        is_builtin=False,
+    )
+    db.add(category)
+    db.flush()
+    add_audit(db, user, "material_category.create", "material_category", category.id)
+    db.commit()
+    db.refresh(category)
+    return material_category_read(db, category)
+
+
+@app.put("/api/v1/material-categories/{category_id}", response_model=MaterialCategoryRead)
+def update_material_category(
+    category_id: str,
+    payload: MaterialCategoryUpdate,
+    user: User = Depends(require_roles("admin", "operator")),
+    db: Session = Depends(get_db),
+) -> MaterialCategoryRead:
+    category = db.get(MaterialCategory, category_id)
+    if category is None:
+        raise HTTPException(status_code=404, detail="素材分类不存在")
+    if payload.name is not None:
+        name = payload.name.strip()
+        duplicate = db.scalar(
+            select(MaterialCategory).where(
+                func.lower(MaterialCategory.name) == name.lower(),
+                MaterialCategory.id != category.id,
+            )
+        )
+        if duplicate is not None:
+            raise HTTPException(status_code=409, detail="素材分类名称已存在")
+        category.name = name
+    if payload.description is not None:
+        category.description = payload.description.strip()
+    if payload.classification_instructions is not None:
+        category.classification_instructions = payload.classification_instructions.strip()
+    if payload.enabled is not None:
+        category.enabled = payload.enabled
+    add_audit(db, user, "material_category.update", "material_category", category.id)
+    db.commit()
+    db.refresh(category)
+    return material_category_read(db, category)
+
+
+@app.delete("/api/v1/material-categories/{category_id}", response_model=MaterialCategoryRead)
+def disable_material_category(
+    category_id: str,
+    user: User = Depends(require_roles("admin", "operator")),
+    db: Session = Depends(get_db),
+) -> MaterialCategoryRead:
+    category = db.get(MaterialCategory, category_id)
+    if category is None:
+        raise HTTPException(status_code=404, detail="素材分类不存在")
+    category.enabled = False
+    add_audit(db, user, "material_category.disable", "material_category", category.id)
+    db.commit()
+    db.refresh(category)
+    return material_category_read(db, category)
+
+
+@app.post("/api/v1/material-categories/{category_id}/restore", response_model=MaterialCategoryRead)
+def restore_material_category(
+    category_id: str,
+    user: User = Depends(require_roles("admin", "operator")),
+    db: Session = Depends(get_db),
+) -> MaterialCategoryRead:
+    category = db.get(MaterialCategory, category_id)
+    if category is None:
+        raise HTTPException(status_code=404, detail="素材分类不存在")
+    category.enabled = True
+    add_audit(db, user, "material_category.restore", "material_category", category.id)
+    db.commit()
+    db.refresh(category)
+    return material_category_read(db, category)
+
+
 @app.post("/api/v1/sources/{source_id}/collect", response_model=SourceCollectRead)
 def collect_source_now(
     source_id: str,
@@ -673,7 +828,13 @@ def collect_source_now(
     except Exception as exc:
         db.rollback()
         raise HTTPException(status_code=502, detail=f"信息源采集失败：{exc}") from exc
-    return SourceCollectRead(source_id=source.id, count=len(items), item_ids=[item.id for item in items])
+    return SourceCollectRead(
+        source_id=source.id,
+        count=len(items),
+        item_ids=[item.id for item in items],
+        classified_count=sum(item.classification_status == "classified" for item in items),
+        classification_failed_count=sum(item.classification_status == "failed" for item in items),
+    )
 
 
 @app.get("/api/v1/materials", response_model=list[MaterialRead])
@@ -682,15 +843,167 @@ def list_materials(
     source_id: str | None = None,
     _: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    category_id: str | None = None,
 ) -> list[MaterialRead]:
     query = select(SourceItem).where(SourceItem.status == "verified")
     if triage_status:
         query = query.where(SourceItem.triage_status == triage_status)
     if source_id:
         query = query.where(SourceItem.source_id == source_id)
-    items = db.scalars(query.order_by(SourceItem.created_at.desc()).limit(300)).all()
+    if category_id:
+        query = query.where(SourceItem.category_id == category_id)
+    try:
+        items = db.scalars(query.order_by(SourceItem.created_at.desc()).limit(300)).all()
+    except OperationalError as exc:
+        raise_material_schema_error(exc)
+        raise
     return [material_read(item) for item in items]
 
+
+@app.post("/api/v1/materials/classify", response_model=MaterialClassifyRead)
+def classify_materials_now(
+    payload: MaterialClassifyRequest,
+    user: User = Depends(require_roles("admin", "operator")),
+    db: Session = Depends(get_db),
+) -> MaterialClassifyRead:
+    query = select(SourceItem).where(SourceItem.status == "verified")
+    if payload.material_ids:
+        query = query.where(SourceItem.id.in_(list(dict.fromkeys(payload.material_ids))))
+    else:
+        statuses = ["pending", "unclassified"]
+        if payload.retry_failed:
+            statuses.append("failed")
+        query = query.where(SourceItem.classification_status.in_(statuses))
+    candidates = db.scalars(query.order_by(SourceItem.created_at.desc()).limit(300)).all()
+    if not candidates:
+        return MaterialClassifyRead(
+            candidate_count=0,
+            classified_count=0,
+            failed_count=0,
+            message="当前没有等待分类的素材。",
+        )
+    categories = db.scalars(
+        select(MaterialCategory).where(MaterialCategory.enabled.is_(True)).order_by(MaterialCategory.name)
+    ).all()
+    model = db.scalar(
+        select(ModelConfig).where(ModelConfig.enabled.is_(True)).order_by(ModelConfig.created_at.desc())
+    )
+    try:
+        result = run_material_classification(
+            db,
+            None,
+            candidates,
+            categories,
+            provider_for(model) if model is not None else None,
+            model,
+        )
+        add_audit(
+            db,
+            user,
+            "material.classify",
+            "source_item",
+            payload.material_ids[0] if len(payload.material_ids) == 1 else None,
+            result,
+        )
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=502, detail=f"素材分类失败：{exc}") from exc
+    return MaterialClassifyRead(
+        **result,
+        message=(
+            f"AI 已分类 {result['classified_count']} 条素材，{result['failed_count']} 条需要重试或人工纠正。"
+        ),
+    )
+
+
+@app.put("/api/v1/materials/{material_id}/category", response_model=MaterialRead)
+def assign_material_category(
+    material_id: str,
+    payload: MaterialCategoryAssign,
+    user: User = Depends(require_roles("admin", "operator")),
+    db: Session = Depends(get_db),
+) -> MaterialRead:
+    material = db.get(SourceItem, material_id)
+    if material is None:
+        raise HTTPException(status_code=404, detail="素材不存在")
+    category = db.get(MaterialCategory, payload.category_id) if payload.category_id else None
+    if payload.category_id and category is None:
+        raise HTTPException(status_code=404, detail="素材分类不存在")
+    if category is not None and not category.enabled:
+        raise HTTPException(status_code=409, detail="素材分类已停用，请先恢复后再使用")
+    material.category_id = category.id if category is not None else None
+    material.classification_status = "classified" if category is not None else "unclassified"
+    material.classification_source = "manual"
+    material.classification_confidence = 100.0 if category is not None else None
+    material.classification_reason = "人工纠正" if category is not None else "人工取消分类"
+    material.classification_error = None
+    add_audit(
+        db,
+        user,
+        "material.category_assign",
+        "source_item",
+        material.id,
+        {"category_id": material.category_id},
+    )
+    db.commit()
+    db.refresh(material)
+    return material_read(material)
+
+
+@app.post("/api/v1/materials/curate", response_model=MaterialCurateRead)
+def curate_materials_now(
+    payload: MaterialCurateRequest,
+    _: User = Depends(require_roles("admin", "operator")),
+    db: Session = Depends(get_db),
+) -> MaterialCurateRead:
+    strategy = db.get(Strategy, payload.strategy_id)
+    if strategy is None:
+        raise HTTPException(status_code=404, detail="内容策略不存在")
+    query = select(SourceItem).where(
+        SourceItem.status == "verified",
+        SourceItem.triage_status.in_(["inbox", "selected"]),
+    )
+    if payload.material_ids:
+        query = query.where(SourceItem.id.in_(payload.material_ids))
+    candidates = db.scalars(query.order_by(SourceItem.created_at.desc()).limit(payload.limit)).all()
+    if not candidates:
+        return MaterialCurateRead(
+            candidate_count=0,
+            selected_count=0,
+            selected_ids=[],
+            selected_titles=[],
+            message="当前没有等待 AI 精选的素材。",
+        )
+    model_id = model_id_for_stage(strategy.config_json or {}, "writing")
+    model = db.get(ModelConfig, model_id) if model_id else None
+    if model is None:
+        model = db.scalar(
+            select(ModelConfig).where(ModelConfig.enabled.is_(True)).order_by(ModelConfig.created_at.desc())
+        )
+    if model is None or not model.enabled:
+        raise HTTPException(status_code=400, detail="请先在模型中心配置一个启用的模型，再进行 AI 精选")
+    try:
+        selected = run_material_curation(
+            db,
+            None,
+            strategy,
+            candidates,
+            provider_for(model),
+            model,
+            payload.limit,
+        )
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=502, detail=f"AI 精选失败：{exc}") from exc
+    return MaterialCurateRead(
+        candidate_count=len(candidates),
+        selected_count=len(selected),
+        selected_ids=[item["id"] for item in selected],
+        selected_titles=[item["title"] for item in selected],
+        message=f"AI 已审核 {len(candidates)} 条素材，精选 {len(selected)} 条进入已保留素材。",
+    )
 
 @app.get("/api/v1/materials/{material_id}", response_model=MaterialDetailRead)
 def get_material(
@@ -759,6 +1072,21 @@ def add_manual_material(
         triage_status="selected",
     )
     db.add(material)
+    db.flush()
+    categories = db.scalars(
+        select(MaterialCategory).where(MaterialCategory.enabled.is_(True)).order_by(MaterialCategory.name)
+    ).all()
+    model = db.scalar(
+        select(ModelConfig).where(ModelConfig.enabled.is_(True)).order_by(ModelConfig.created_at.desc())
+    )
+    run_material_classification(
+        db,
+        None,
+        [material],
+        categories,
+        provider_for(model) if model is not None else None,
+        model,
+    )
     add_audit(db, user, "material.manual_create", "source_item", material.id, {"source_id": source.id})
     db.commit()
     db.refresh(material)
@@ -877,6 +1205,7 @@ def start_topic_writing(
     background: BackgroundTasks,
     user: User = Depends(require_roles("admin", "operator")),
     db: Session = Depends(get_db),
+    payload: TopicStartWriting = TopicStartWriting(),
 ) -> Job:
     topic = db.get(Topic, topic_id)
     if topic is None:
@@ -892,7 +1221,21 @@ def start_topic_writing(
     strategy = db.get(Strategy, topic.strategy_id)
     if strategy is None:
         raise HTTPException(status_code=404, detail="Content strategy not found")
-    job = create_job(db, strategy, f"write-topic:{topic.id}", payload={"mode": "write_topic", "topic_id": topic.id})
+    execution_config_override: dict[str, Any] | None = None
+    if payload.disable_writing_skill:
+        execution_config_override = {"skill_by_stage": {}, "skill_ids": []}
+    elif payload.writing_skill_id:
+        skill = db.get(Skill, payload.writing_skill_id)
+        if skill is None or skill.status != "published" or skill.skill_type != "writing":
+            raise HTTPException(status_code=400, detail="写作 Skill 不存在或未发布")
+        execution_config_override = {"skill_by_stage": {"writing": skill.id}, "skill_ids": []}
+    job = create_job(
+        db,
+        strategy,
+        f"write-topic:{topic.id}",
+        payload={"mode": "write_topic", "topic_id": topic.id},
+        execution_config_override=execution_config_override,
+    )
     topic.status = "writing"
     for material in materials:
         material.triage_status = "used"
@@ -922,14 +1265,15 @@ def add_strategy(
     db: Session = Depends(get_db),
 ) -> StrategyRead:
     try:
+        schedule = normalize_schedule(payload.schedule)
         strategy_config = validate_strategy_definition(payload.config)
         validate_strategy_definition_references(db, strategy_config)
-    except StrategyConfigError as exc:
+    except (StrategyConfigError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     strategy = Strategy(
         name=payload.name,
         objective=payload.objective,
-        schedule=payload.schedule,
+        schedule=schedule,
         automation_level=payload.automation_level,
         enabled=payload.enabled,
         config_json=strategy_config,
@@ -965,12 +1309,13 @@ def update_strategy(
         raise HTTPException(status_code=404, detail="内容策略不存在")
     try:
         strategy_config = validate_strategy_definition(payload.config)
+        schedule = normalize_schedule(payload.schedule)
         validate_strategy_definition_references(db, strategy_config)
-    except StrategyConfigError as exc:
+    except (StrategyConfigError, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     strategy.name = payload.name
     strategy.objective = payload.objective
-    strategy.schedule = payload.schedule
+    strategy.schedule = schedule
     strategy.automation_level = payload.automation_level
     strategy.enabled = payload.enabled
     strategy.config_json = strategy_config
@@ -1610,7 +1955,15 @@ def retry_job(
     job.completed_at = None
     job.duration_ms = 0
     job.last_error = None
-    db.commit()
+    for attempt in range(3):
+        try:
+            db.commit()
+            break
+        except OperationalError as exc:
+            db.rollback()
+            if attempt == 2:
+                raise HTTPException(status_code=503, detail="数据库正忙，请稍后重试") from exc
+            time.sleep(0.5 * (attempt + 1))
     notify_wake()
     background.add_task(_run_background, job.id)
     return job
@@ -1713,6 +2066,10 @@ def add_revision(
     db.add(Review(article_revision_id=revision.id, status="pending", auto_result_json={}))
     job = db.get(Job, article.job_id)
     if job is not None and job.status not in {"canceled", "failed_terminal"}:
+        job_payload = dict(job.payload_json or {})
+        job_payload["pending_revision_id"] = revision.id
+        job_payload.pop("approved_revision_id", None)
+        job.payload_json = job_payload
         job.status = "waiting_review"
         job.current_step = "review"
         job.available_at = None
@@ -1738,6 +2095,43 @@ def list_themes(_: User = Depends(get_current_user), db: Session = Depends(get_d
     return [theme_read(item) for item in db.scalars(select(Theme).order_by(Theme.created_at.asc())).all()]
 
 
+def _ai_layout_preview(
+    db: Session,
+    article: Article,
+    revision: ArticleRevision,
+    theme: Theme,
+    version: ThemeVersion,
+) -> str:
+    from .themes import extract_html, layout_instruction, validate_gzh_html
+
+    execution: dict[str, Any] = {}
+    if article.job_id:
+        job = db.get(Job, article.job_id)
+        if job is not None:
+            snapshot = (job.payload_json or {}).get("runtime_snapshot") or {}
+            execution = snapshot.get("execution_config") or {}
+    model_id = model_id_for_stage(execution, "render", None) or execution.get("default_model_id")
+    model = db.get(ModelConfig, model_id) if isinstance(model_id, str) else None
+    if model is None or not model.enabled:
+        raise HTTPException(
+            status_code=400,
+            detail="AI 排版预览需要策略配置 render 阶段模型（model_by_stage.render 或 default_model_id）",
+        )
+    provider = provider_for(model)
+    response = provider.complete(
+        CompletionRequest(
+            system=layout_instruction(theme, version),
+            user=f"文章标题：{article.title}\n\n文章正文（Markdown）：\n{revision.content_markdown}",
+            max_tokens=8000,
+        )
+    )
+    html = extract_html(response.text)
+    errors = validate_gzh_html(html)
+    if errors:
+        raise HTTPException(status_code=502, detail=f"AI 排版输出不合规：{', '.join(errors[:4])}")
+    return html
+
+
 @app.post(
     "/api/v1/articles/{article_id}/revisions/{revision_id}/themes/{theme_id}/preview",
     response_model=ThemePreviewRead,
@@ -1748,6 +2142,7 @@ def preview_article_theme(
     theme_id: str,
     _: User = Depends(get_current_user),
     db: Session = Depends(get_db),
+    mode: str = "deterministic",
 ) -> ThemePreviewRead:
     ensure_builtin_themes(db)
     db.flush()
@@ -1758,12 +2153,25 @@ def preview_article_theme(
         raise HTTPException(status_code=404, detail="文章修订版本不存在")
     if not theme:
         raise HTTPException(status_code=404, detail="排版主题不存在")
-    rendered = render_revision(db, revision, theme)
-    version = db.scalar(select(ThemeVersion).where(ThemeVersion.id == rendered.theme_version_id))
+    if not theme.enabled:
+        raise HTTPException(status_code=400, detail="排版主题已停用")
+    version = db.scalar(
+        select(ThemeVersion).where(
+            ThemeVersion.theme_id == theme.id,
+            ThemeVersion.version == theme.current_version,
+        )
+    )
     if version is None:
         raise HTTPException(status_code=500, detail="排版主题版本不存在")
+    if mode == "ai":
+        html = _ai_layout_preview(db, article, revision, theme, version)
+    elif mode == "deterministic":
+        rendered = render_revision(db, revision, theme)
+        html = rendered.html
+    else:
+        raise HTTPException(status_code=400, detail="mode 只能是 deterministic 或 ai")
     db.commit()
-    return ThemePreviewRead(theme=theme_read(theme), theme_version=version.version, html=rendered.html)
+    return ThemePreviewRead(theme=theme_read(theme), theme_version=version.version, html=html)
 
 
 @app.post("/api/v1/themes", response_model=ThemeRead)
@@ -2515,6 +2923,10 @@ def review_article(
     )
     should_resume = payload.decision == "approve" and job is not None and job.status == "waiting_review"
     if should_resume and job is not None:
+        job_payload = dict(job.payload_json or {})
+        job_payload["approved_revision_id"] = revision.id
+        job_payload.pop("pending_revision_id", None)
+        job.payload_json = job_payload
         job.status = "queued"
         job.available_at = datetime.now(timezone.utc)
         job.lease_until = None

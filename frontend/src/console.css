@@ -79,12 +79,9 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .login-form-card .ant-input-prefix { margin-right: 12px; color: #a8b1c0; }
 .login-form-card .ant-btn-primary { height: 58px; margin-top: 24px; border-radius: 9px; font-size: 17px; }
 .login-options { display: flex; align-items: center; justify-content: space-between; margin-top: -4px; }
-.login-options button, .login-help a { padding: 0; border: 0; color: var(--blue); background: none; cursor: pointer; }
 .security-note { display: flex; align-items: center; justify-content: center; gap: 28px; margin-top: 34px; color: #7f8999; }
 .security-note span { display: flex; align-items: center; gap: 9px; }
 .security-note i { width: 1px; height: 18px; background: #dfe3ea; }
-.login-help { margin-top: 86px; padding-top: 30px; border-top: 1px solid var(--line); color: #6f798b; }
-.login-help small { display: block; margin-top: 24px; padding: 15px; border-radius: 9px; color: #8a93a2; background: #f7f8fa; }
 .session-loading { min-height: 100vh; display: grid; align-content: center; justify-items: center; gap: 12px; color: #667085; }
 .session-loading span { display: grid; width: 46px; height: 46px; place-items: center; color: #fff; border-radius: 13px; background: var(--blue); font-weight: 800; }
 .session-loading p { margin: 0; }
@@ -423,7 +420,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 }
 
 @media (max-width: 760px) {
-  .login-page { grid-template-columns: 1fr; }.login-story { min-height: auto; padding: 28px 24px 40px; }.login-thesis { padding: 64px 0 20px; }.login-thesis h1 { font-size: 34px; }.login-story footer { display: none; }.login-form-side { min-height: auto; padding: 52px 24px; border-radius: 0; }.login-help { margin-top: 50px; }
+  .login-page { grid-template-columns: 1fr; }.login-story { min-height: auto; padding: 28px 24px 40px; }.login-thesis { padding: 64px 0 20px; }.login-thesis h1 { font-size: 34px; }.login-story footer { display: none; }.login-form-side { min-height: auto; padding: 52px 24px; border-radius: 0; }
   .console-shell { display: block; }.console-main { width: 100%; }.console-sidebar { width: 226px; transform: translateX(-100%); transition: transform 180ms ease; }.sidebar-visible .console-sidebar { transform: translateX(0); }
   .sidebar-visible .console-brand > span:last-child, .sidebar-visible .main-navigation button span, .sidebar-visible .nav-chevron, .sidebar-visible .sidebar-bottom { display: grid; }.sidebar-visible .settings-subnav { display: grid; }
   .sidebar-visible .main-navigation > button { justify-content: flex-start; padding: 0 14px; }

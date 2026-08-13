@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import type { Article, ChannelAccount, Material, Strategy, Theme, Topic, TopicAlgorithm, TopicAlgorithmPayload } from "./api";
+import type { Article, ChannelAccount, Job, Material, MaterialCategory, MaterialDetail, Skill, Source, Strategy, Theme, Topic, TopicAlgorithm, TopicAlgorithmPayload } from "./api";
+import { api } from "./api";
 import { Icon } from "./design";
 
 function stamp(value?: string | null) {
@@ -15,74 +16,187 @@ function excerpt(value: string, length = 96) {
   return value.length > length ? value.slice(0, length) + "…" : value;
 }
 
+function previewText(value: string) {
+  return value
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>\s*<p>/gi, "\n\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, "\"")
+    .replace(/&#39;/gi, "'")
+    .trim();
+}
+function sourceTypeLabel(type: string) {
+  if (type === "rss") return "RSS";
+  if (type === "url") return "网页";
+  if (type === "aihot_api") return "AI HOT";
+  if (type === "manual") return "手动";
+  return type.toUpperCase();
+}
+
 function EmptyState({ title, detail }: { title: string; detail: string }) {
   return <div className="flow-empty"><span><Icon name="spark" size={20} /></span><strong>{title}</strong><p>{detail}</p></div>;
 }
 
-type CreatePayload = { materialIds: string[]; strategyId: string; title?: string };
+type CreatePayload = { materialIds: string[]; strategyId: string; title?: string; skillId: string };
 
 export function MaterialWorkspace({
-  materials, strategies, creating, onCreate, onAddSource,
+  materials, categories, sources, skills, strategies, loadError, creating, onCreate, onManageSources, onCollect, collecting, onCurate, curating, curationResult,
+  onClassify, classifying, onTriage, onAssignCategory, onAddCategory, onUpdateCategory, onDisableCategory, onRestoreCategory,
 }: {
   materials: Material[];
+  categories: MaterialCategory[];
+  sources: Source[];
+  skills: Skill[];
   strategies: Strategy[];
+  loadError: string;
   creating: boolean;
   onCreate: (payload: CreatePayload) => void;
-  onAddSource: () => void;
+  onManageSources: () => void;
+  onCollect: (ids: string[]) => void;
+  collecting: boolean;
+  onCurate: (strategyId: string) => void;
+  curating: boolean;
+  curationResult?: { candidate_count: number; selected_count: number; message: string } | null;
+  onClassify: (ids?: string[]) => void;
+  classifying: boolean;
+  onTriage: (id: string, decision: "save" | "ignore" | "reopen") => void;
+  onAssignCategory: (id: string, categoryId: string | null) => void;
+  onAddCategory: (payload: { name: string; description?: string; classification_instructions?: string }) => Promise<MaterialCategory>;
+  onUpdateCategory: (id: string, payload: Partial<Pick<MaterialCategory, "name" | "description" | "classification_instructions" | "enabled">>) => Promise<MaterialCategory>;
+  onDisableCategory: (id: string) => Promise<MaterialCategory>;
+  onRestoreCategory: (id: string) => Promise<MaterialCategory>;
 }) {
-  const retained = useMemo(
-    () => materials.filter((item) => item.triage_status === "selected" || item.triage_status === "used"),
-    [materials],
-  );
+  const [view, setView] = useState<"inbox" | "retained" | "ignored">("inbox");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [query, setQuery] = useState("");
   const [composerOpen, setComposerOpen] = useState(false);
   const [strategyId, setStrategyId] = useState("");
+  const [curationStrategyId, setCurationStrategyId] = useState("");
+  const [collectOpen, setCollectOpen] = useState(false);
+  const [collectIds, setCollectIds] = useState<string[] | null>(null);
+  const [draftCollectIds, setDraftCollectIds] = useState<string[]>([]);
+  const [sourceId, setSourceId] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [categoryForm, setCategoryForm] = useState({ name: "", description: "", classification_instructions: "" });
   const [title, setTitle] = useState("");
-  const visible = retained.filter((item) =>
+  const [composerSkillId, setComposerSkillId] = useState("");
+  const [previewMaterial, setPreviewMaterial] = useState<Material | null>(null);
+  const [previewDetail, setPreviewDetail] = useState<MaterialDetail | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState("");
+  const retained = useMemo(() => materials.filter((item) => item.triage_status === "selected" || item.triage_status === "used"), [materials]);
+  const inbox = useMemo(() => materials.filter((item) => item.triage_status === "inbox"), [materials]);
+  const ignored = useMemo(() => materials.filter((item) => item.triage_status === "ignored"), [materials]);
+  const viewMaterials = view === "inbox" ? inbox : view === "retained" ? retained : ignored;
+  const sourceFiltered = viewMaterials.filter((item) =>
+    (!sourceId || item.source_id === sourceId) && (!categoryId || item.category_id === categoryId),
+  );
+  const visible = sourceFiltered.filter((item) =>
     (item.title + " " + item.source_name + " " + item.content_excerpt).toLowerCase().includes(query.trim().toLowerCase()),
   );
-  const toggle = (id: string) => setSelectedIds((current) =>
-    current.includes(id) ? current.filter((item) => item !== id) : current.length < 12 ? [...current, id] : current,
-  );
+  const enabledSourceIds = useMemo(() => sources.filter((source) => source.enabled).map((source) => source.id), [sources]);
+  useEffect(() => {
+    if (!previewMaterial) {
+      setPreviewDetail(null);
+      setPreviewError("");
+      return;
+    }
+    let active = true;
+    setPreviewDetail(null);
+    setPreviewError("");
+    setPreviewLoading(true);
+    void api.material(previewMaterial.id)
+      .then((detail) => { if (active) setPreviewDetail(detail); })
+      .catch((error: Error) => { if (active) setPreviewError(error.message); })
+      .finally(() => { if (active) setPreviewLoading(false); });
+    return () => { active = false; };
+  }, [previewMaterial]);  useEffect(() => {
+    if (sourceId && !sources.some((source) => source.id === sourceId)) setSourceId("");
+  }, [sourceId, sources]);
+  useEffect(() => {
+    if (view === "inbox" && !inbox.length && retained.length) setView("retained");
+  }, [inbox.length, retained.length, view]);
+  useEffect(() => {
+    const first = strategies.find((item) => item.enabled)?.id || "";
+    if (!curationStrategyId || !strategies.some((item) => item.id === curationStrategyId && item.enabled)) setCurationStrategyId(first);
+    if (!strategyId && first) setStrategyId(first);
+  }, [curationStrategyId, strategies, strategyId]);
+  useEffect(() => {
+    const strategy = strategies.find((item) => item.id === strategyId);
+    const config = strategy?.config as Record<string, unknown> | undefined;
+    const byStage = (config?.skill_by_stage ?? {}) as Record<string, string>;
+    const ids = (config?.skill_ids ?? []) as string[];
+    setComposerSkillId(byStage.writing ?? ids[0] ?? "");
+  }, [strategyId, strategies]);
+  const toggle = (id: string) => setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : current.length < 12 ? [...current, id] : current);
+  const editingCategory = categories.find((category) => category.id === editingCategoryId) ?? null;
+  const editCategory = (category: MaterialCategory) => {
+    setEditingCategoryId(category.id);
+    setCategoryForm({
+      name: category.name,
+      description: category.description,
+      classification_instructions: category.classification_instructions,
+    });
+  };
+  const newCategory = () => {
+    setEditingCategoryId(null);
+    setCategoryForm({ name: "", description: "", classification_instructions: "" });
+  };
+  const saveCategory = async () => {
+    const payload = {
+      name: categoryForm.name.trim(),
+      description: categoryForm.description.trim(),
+      classification_instructions: categoryForm.classification_instructions.trim(),
+    };
+    if (!payload.name) return;
+    if (editingCategory) await onUpdateCategory(editingCategory.id, payload);
+    else {
+      const created = await onAddCategory(payload);
+      setEditingCategoryId(created.id);
+    }
+  };
   const submit = () => {
     if (!selectedIds.length || !strategyId) return;
-    onCreate({ materialIds: selectedIds, strategyId, title: title.trim() || undefined });
+    onCreate({ materialIds: selectedIds, strategyId, title: title.trim() || undefined, skillId: composerSkillId });
   };
-
   return (
     <main className="figma-page flow-page">
       <header className="flow-heading">
-        <div><span className="flow-kicker">RETAINED MATERIALS</span><h1>素材池</h1><p>这里只保留你或 AI 判断值得继续使用的素材。多选素材后，可直接组合成一个创作任务。</p></div>
-        <button className="flow-primary" type="button" onClick={onAddSource}><Icon name="link" size={16} /> 管理信息源</button>
+        <div><span className="flow-kicker">RETAINED MATERIALS</span><h1>素材池 <small>{materials.length}</small></h1><p>先采集到待精选区，再让 AI 审核；只有已保留素材会进入创作选择。</p></div>
+        <div className="flow-heading-actions"><button className="flow-secondary" type="button" onClick={() => { setCategoryManagerOpen(true); if (!editingCategory) newCategory(); }}><Icon name="database" size={16} /> 管理分类</button><button className="flow-secondary" type="button" onClick={() => { setDraftCollectIds(collectIds ?? enabledSourceIds); setCollectOpen(true); }}><Icon name="link" size={16} /> 采集设置</button><button className="flow-primary" type="button" onClick={() => onCollect(collectIds ?? enabledSourceIds)} disabled={collecting || !enabledSourceIds.length}><Icon name="refresh" size={16} /> {collecting ? "正在采集…" : "立即采集"}</button></div>
       </header>
+      {loadError && <div className="flow-load-error" role="alert"><Icon name="alert" size={17} /><div><strong>素材池暂时不可用</strong><span>{loadError}</span></div></div>}
       <section className="flow-toolbar">
-        <label className="flow-search"><Icon name="search" size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索已保留素材" /></label>
-        <span>{retained.length} 条已保留</span>
-        <button className="flow-secondary" type="button" disabled={!selectedIds.length} onClick={() => setComposerOpen(true)}>基于已选 {selectedIds.length} 条创作</button>
+        <div className="flow-tabs" role="tablist"><button className={view === "inbox" ? "is-active" : ""} type="button" onClick={() => setView("inbox")}>待 AI 精选 <b>{inbox.length}</b></button><button className={view === "retained" ? "is-active" : ""} type="button" onClick={() => setView("retained")}>已保留 <b>{retained.length}</b></button><button className={view === "ignored" ? "is-active" : ""} type="button" onClick={() => setView("ignored")}>已忽略 <b>{ignored.length}</b></button></div>
+        <label className="flow-search"><Icon name="search" size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索素材" /></label>
+        <select className="flow-select flow-source-select" value={sourceId} onChange={(event) => setSourceId(event.target.value)} aria-label="按信息源筛选"><option value="">全部信息源</option>{sources.filter((source) => source.enabled || materials.some((item) => item.source_id === source.id)).map((source) => <option value={source.id} key={source.id}>{source.name}</option>)}</select>
+        <select className="flow-select" value={categoryId} onChange={(event) => setCategoryId(event.target.value)} aria-label="按素材分类筛选"><option value="">全部分类</option>{categories.filter((category) => category.enabled || materials.some((item) => item.category_id === category.id)).map((category) => <option value={category.id} key={category.id}>{category.name}（{category.material_count}）</option>)}</select>
+        <span className="flow-filter-count">当前筛选 {sourceFiltered.length} 条</span>
+        {view === "inbox" && <><button className="flow-secondary" type="button" disabled={classifying || !materials.some((item) => item.classification_status !== "classified")} onClick={() => onClassify()}><Icon name="magic" size={15} /> {classifying ? "AI 分类中…" : "重试 AI 分类"}</button><select className="flow-select" value={curationStrategyId} onChange={(event) => setCurationStrategyId(event.target.value)} aria-label="AI 精选策略"><option value="">选择精选策略</option>{strategies.filter((item) => item.enabled).map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select><button className="flow-secondary flow-ai-button" type="button" disabled={!inbox.length || !curationStrategyId || curating} onClick={() => onCurate(curationStrategyId)}><Icon name="spark" size={15} /> {curating ? "AI 审核中…" : "AI 精选素材"}</button></>}
+
       </section>
+      {selectedIds.length > 0 && <div className="flow-selection-bar"><span>已选 <b>{selectedIds.length}</b> 条素材</span><button className="flow-secondary" type="button" onClick={() => setSelectedIds([])}>清空选择</button><button className="flow-primary" type="button" disabled={!strategyId} onClick={() => setComposerOpen(true)}>下一步：创建选题并写作</button></div>}
+      {curationResult && <div className="flow-notice" role="status"><Icon name="check" size={17} /><div><strong>AI 精选已完成</strong><span>{curationResult.message}</span></div></div>}
       {visible.length ? <section className="retained-grid">{visible.map((material) => {
         const selected = selectedIds.includes(material.id);
         return <article className={"retained-card" + (selected ? " is-selected" : "")} key={material.id}>
-          <button className="retained-select" type="button" aria-pressed={selected} onClick={() => toggle(material.id)}>
-            <span className="retained-check">{selected ? "✓" : ""}</span><span className="figma-tag">{material.source_name}</span>
-            <time>{stamp(material.published_at || material.created_at)}</time><h2>{material.title}</h2>
-            <p>{excerpt(material.content_excerpt || "暂无摘要")}</p>
-          </button>
-          <footer><span>{material.triage_status === "used" ? "已用于创作" : "已保留"}</span>{material.url && <a href={material.url} target="_blank" rel="noreferrer">查看原文 <Icon name="external" size={13} /></a>}</footer>
+          <button className="retained-select" type="button" aria-pressed={selected} onClick={() => toggle(material.id)}><span className="retained-check">{selected ? "✓" : ""}</span><span className="figma-tag">{material.category_name || (material.classification_status === "failed" ? "分类失败" : "待分类")}</span><span className="figma-tag material-source-tag">{material.source_name}</span><time>{stamp(material.published_at || material.created_at)}</time><h2>{material.title}</h2><p>{excerpt(material.content_excerpt || "暂无摘要")}</p></button>
+          <footer><span>{material.triage_status === "used" ? "已用于创作" : material.triage_status === "selected" ? "已保留" : material.triage_status === "ignored" ? "已忽略" : "等待 AI 精选"}</span>{material.triage_status === "inbox" && <><button className="flow-preview-link" type="button" onClick={() => onTriage(material.id, "save")}>保留</button><button className="flow-preview-link" type="button" onClick={() => onTriage(material.id, "ignore")}>忽略</button></>}{material.triage_status === "ignored" && <button className="flow-preview-link" type="button" onClick={() => onTriage(material.id, "reopen")}>恢复到待精选</button>}<select aria-label={`修正 ${material.title} 的分类`} value={material.category_id || ""} onChange={(event) => onAssignCategory(material.id, event.target.value || null)}><option value="">未分类</option>{categories.filter((category) => category.enabled).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select><button className="flow-preview-link" type="button" onClick={() => setPreviewMaterial(material)}><Icon name="eye" size={13} />预览内容</button>{material.url && <a href={material.url} target="_blank" rel="noreferrer">查看原文 <Icon name="external" size={13} /></a>}</footer>
         </article>;
-      })}</section> : <EmptyState title={query ? "没有匹配的素材" : "素材池还是空的"} detail={query ? "换一个关键词试试。" : "去选题雷达运行扫描，遇到好素材时点击“保留素材”。"} />}
-      {composerOpen && <div className="flow-drawer" role="dialog" aria-modal="true" aria-label="开始创作">
-        <div className="flow-drawer-head"><div><span className="flow-kicker">QUICK CREATE</span><h2>开始创作</h2></div><button type="button" aria-label="关闭" onClick={() => setComposerOpen(false)}><Icon name="close" size={18} /></button></div>
-        <p>已选择 {selectedIds.length} 条素材。模型会把它们一起写入事实依据，不再只使用第一条。</p>
-        <label>文章标题（可选）<input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="留空则使用主素材标题" /></label>
-        <label>使用生产线<select value={strategyId} onChange={(event) => setStrategyId(event.target.value)}><option value="">请选择</option>{strategies.filter((item) => item.enabled).map((strategy) => <option value={strategy.id} key={strategy.id}>{strategy.name}</option>)}</select></label>
-        <div className="flow-drawer-actions"><button className="flow-secondary" type="button" onClick={() => setComposerOpen(false)}>取消</button><button className="flow-primary" type="button" disabled={!strategyId || creating} onClick={submit}>{creating ? "正在创建…" : "创建并开始写作"}</button></div>
-      </div>}
+      })}</section> : <EmptyState title={view === "inbox" ? "暂无待精选素材" : view === "retained" ? "还没有已保留素材" : "没有已忽略素材"} detail={view === "inbox" ? "点击右上角立即采集，或检查采集设置。" : view === "retained" ? "在待 AI 精选区保留后，素材会出现在这里。" : "被忽略的素材会保留在这里，并可随时恢复。"} />}
+      {previewMaterial && <div className="figma-modal-backdrop" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) setPreviewMaterial(null); }}><article className="figma-modal material-preview-modal" role="dialog" aria-modal="true" aria-label="素材预览"><button className="modal-close" type="button" aria-label="关闭预览" onClick={() => setPreviewMaterial(null)}><Icon name="close" size={18} /></button><span className="eyebrow">MATERIAL PREVIEW</span><h2>{previewDetail?.title || previewMaterial.title}</h2><div className="material-preview-meta"><span>{previewDetail?.source_name || previewMaterial.source_name}</span><time>{stamp(previewDetail?.published_at || previewMaterial.published_at || previewDetail?.created_at || previewMaterial.created_at)}</time></div>{previewLoading ? <div className="material-preview-loading">正在加载素材正文…</div> : previewError ? <div className="material-preview-error">预览加载失败：{previewError}</div> : <div className="material-preview-body"><p>{previewText(previewDetail?.content || previewMaterial.content_excerpt || "暂无可预览内容")}</p></div>}<footer className="material-preview-footer">{previewMaterial.url && <a href={previewMaterial.url} target="_blank" rel="noreferrer">打开原文 <Icon name="external" size={13} /></a>}<button className="flow-secondary" type="button" onClick={() => setPreviewMaterial(null)}>关闭预览</button></footer></article></div>}
+      {categoryManagerOpen && <section className="flow-drawer category-drawer" role="dialog" aria-modal="true" aria-label="管理素材分类"><div className="flow-drawer-head"><div><span className="flow-kicker">MATERIAL CATEGORIES</span><h2>管理素材分类</h2></div><button type="button" aria-label="关闭" onClick={() => setCategoryManagerOpen(false)}><Icon name="close" size={18} /></button></div><p>AI 会在外文翻译完成后自动分类；你可以在素材卡片上人工纠正。停用分类不会删除历史素材。</p><div className="category-manager-list">{categories.map((category) => <button type="button" key={category.id} className={editingCategory?.id === category.id ? "is-active" : ""} onClick={() => editCategory(category)}><strong>{category.name}</strong><small>{category.enabled ? `${category.material_count} 条素材` : "已停用"}</small></button>)}<button className="category-new" type="button" onClick={newCategory}>+ 新建分类</button></div><label>分类名称<input value={categoryForm.name} maxLength={100} onChange={(event) => setCategoryForm((value) => ({ ...value, name: event.target.value }))} placeholder="例如：AI 应用案例" /></label><label>分类说明<input value={categoryForm.description} maxLength={500} onChange={(event) => setCategoryForm((value) => ({ ...value, description: event.target.value }))} placeholder="告诉 AI 这个分类包含什么" /></label><label>分类判断补充规则<textarea value={categoryForm.classification_instructions} maxLength={2000} onChange={(event) => setCategoryForm((value) => ({ ...value, classification_instructions: event.target.value }))} placeholder="可选：需要归入或排除的具体条件" /></label><div className="flow-drawer-actions"><button className="flow-secondary" type="button" onClick={() => setCategoryManagerOpen(false)}>完成</button>{editingCategory && (editingCategory.enabled ? <button className="flow-danger" type="button" onClick={() => void onDisableCategory(editingCategory.id)}>停用分类</button> : <button className="flow-secondary" type="button" onClick={() => void onRestoreCategory(editingCategory.id)}>恢复分类</button>)}<button className="flow-primary" type="button" disabled={!categoryForm.name.trim()} onClick={() => void saveCategory()}>{editingCategory ? "保存分类" : "创建分类"}</button></div></section>}
+      {collectOpen && <section className="flow-drawer collect-source-drawer" role="dialog" aria-modal="true" aria-label="采集设置"><div className="flow-drawer-head"><div><span className="flow-kicker">COLLECTION</span><h2>采集设置</h2></div><button type="button" aria-label="关闭" onClick={() => setCollectOpen(false)}><Icon name="close" size={18} /></button></div><p>勾选要采集的信息源，点击“确定”后，右上角“立即采集”会按你的选择运行。新增、编辑和停用信息源请到「设置 → 信息源」。</p><div className="collect-source-list">{sources.filter((source) => source.enabled).map((source) => <label key={source.id} className={draftCollectIds.includes(source.id) ? "is-selected" : ""}><input type="checkbox" checked={draftCollectIds.includes(source.id)} onChange={(event) => setDraftCollectIds((current) => event.target.checked ? [...current, source.id] : current.filter((id) => id !== source.id))} /><span><strong>{source.name}</strong><small>{sourceTypeLabel(source.source_type)}{source.url ? ` · ${source.url}` : ""}</small></span></label>)}{!sources.some((source) => source.enabled) && <p className="collect-source-empty">还没有启用的信息源，请先到「设置 → 信息源」添加。</p>}</div><div className="flow-drawer-actions"><button className="flow-secondary" type="button" onClick={() => setDraftCollectIds(enabledSourceIds)}>全选</button><button className="flow-secondary" type="button" onClick={() => setDraftCollectIds([])}>清空</button><button className="flow-secondary" type="button" onClick={() => { setCollectOpen(false); onManageSources(); }}>管理信息源</button><button className="flow-primary" type="button" disabled={!draftCollectIds.length} onClick={() => { setCollectIds(draftCollectIds); setCollectOpen(false); }}>确定</button></div></section>}
+      {composerOpen && <div className="flow-drawer" role="dialog" aria-modal="true" aria-label="开始创作">'<div className="flow-drawer-head"><div><span className="flow-kicker">QUICK CREATE</span><h2>开始创作</h2></div><button type="button" aria-label="关闭" onClick={() => setComposerOpen(false)}><Icon name="close" size={18} /></button></div><p>已选择 {selectedIds.length} 条素材，模型会把它们一起写入事实依据。</p><label>文章标题（可选）<input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="留空则使用主素材标题" /></label><label>使用生产线<select value={strategyId} onChange={(event) => setStrategyId(event.target.value)}><option value="">请选择</option>{strategies.filter((item) => item.enabled).map((strategy) => <option value={strategy.id} key={strategy.id}>{strategy.name}</option>)}</select></label><label>写作 Skill<select value={composerSkillId} onChange={(event) => setComposerSkillId(event.target.value)}><option value="">跟随生产线</option><option value="none">通用写作（不套用 Skill）</option>{skills.filter((item) => item.status === "published" && item.skill_type === "writing").map((skill) => <option key={skill.id} value={skill.id}>{skill.name} · v{skill.version}</option>)}</select><small>默认跟随生产线的写作 Skill；选“通用写作”则本次不套用任何 Skill。</small></label><div className="flow-drawer-actions"><button className="flow-secondary" type="button" onClick={() => setComposerOpen(false)}>取消</button><button className="flow-primary" type="button" disabled={!strategyId || creating} onClick={submit}>{creating ? "正在创建…" : "创建并开始写作"}</button></div></div>}
     </main>
   );
 }
-
 const DIMENSION_LABELS: Record<string, string> = {
   heat: "热度", timeliness: "时效", reader_value: "读者价值", strategy_fit: "策略匹配",
 };
@@ -216,26 +330,36 @@ export function hasFinalArticleBody(article: Article) {
   return content.length >= 300 && !["这是一份基于已核验来源生成的草稿。", "质检报告", "L1 硬性规则", "L2 风格一致性", "禁用词：", "结构套话"].some((marker) => content.includes(marker));
 }
 
+export function isReviewFailureStatus(status: string) {
+  return ["failed", "failed_retryable", "failed_terminal"].includes(status);
+}
+
 export function ReviewQueue({
-  articles, selectedId, pending, onSelect, onApprove, onChanges, onEdit,
+  articles, jobs, selectedId, pending, retrying, onSelect, onApprove, onChanges, onEdit, onRetry,
 }: {
   articles: Article[];
+  jobs: Job[];
   selectedId: string | null;
   pending: boolean;
+  retrying: boolean;
   onSelect: (id: string) => void;
   onApprove: (article: Article) => void;
   onChanges: (article: Article) => void;
   onEdit: (id: string) => void;
+  onRetry: (id: string) => void;
 }) {
   const queue = articles.filter((article) => ["waiting_review", "changes_requested", "edited"].includes(article.status));
+  const activeJobs = jobs.filter((job) => ["queued", "running", "retrying"].includes(job.status));
+  const failedJobs = jobs.filter((job) => isReviewFailureStatus(job.status));
   const selected = queue.find((article) => article.id === selectedId) || queue[0];
+  const stepName = (value: string | null) => ({ collect: "采集素材", normalize: "整理素材", deduplicate: "去重", topic: "AI 选题", evidence: "构建事实依据", outline: "生成大纲", writing: "撰写正文", style: "应用文风", rewrite: "自然化改写", review: "质量审核", render: "排版", draft: "生成草稿" }[value || ""] || "准备中");
   return (
     <main className="figma-page flow-page">
-      <header className="flow-heading"><div><span className="flow-kicker">REVIEW QUEUE</span><h1>待审核</h1><p>这里只出现需要你判断的文章。通过后自动移入成稿库，不再混在审核队列里。</p></div><span className="queue-count">{queue.length} 篇待处理</span></header>
+      <header className="flow-heading"><div><span className="flow-kicker">REVIEW QUEUE</span><h1>待审核</h1><p>生成任务的进度也会显示在这里；正文完成后进入审核，通过后自动移入成稿库。</p></div><span className="queue-count">{queue.length} 篇待审核 · {activeJobs.length} 篇生成中</span></header>{activeJobs.length > 0 && <section className="generation-status" aria-label="文章生成进度"><h2>正在生成</h2>{activeJobs.map((job) => <article key={job.id}><span className="generation-spinner" aria-hidden="true" /><div><strong>{String((job.runtime_snapshot.strategy as { name?: unknown } | undefined)?.name || "内容生产任务")}</strong><small>当前步骤：{stepName(job.current_step)} · 第 {job.attempt_count + 1} 次执行</small></div></article>)}</section>}{failedJobs.length > 0 && <section className="generation-status is-error" aria-label="生成失败任务"><h2>需要处理</h2>{failedJobs.map((job) => <article key={job.id}><Icon name="alert" size={17} /><div><strong>文章生成失败</strong><small>{job.last_error || "任务执行失败，可重试"}</small></div><button className="flow-secondary" type="button" disabled={retrying} onClick={() => onRetry(job.id)}>重试</button></article>)}</section>}
       {selected ? <section className="review-workbench">
         <aside className="review-queue-list">{queue.map((article) => <button type="button" className={article.id === selected.id ? "is-active" : ""} key={article.id} onClick={() => onSelect(article.id)}><span>{article.status === "changes_requested" ? "待修改" : article.status === "edited" ? "待重新审核" : "待审核"}</span><strong>{article.title}</strong><small>{article.revisions.length} 个版本</small></button>)}</aside>
-        <article className="review-document"><header><div><span className="figma-tag">事实校验后生成</span><h2>{selected.title}</h2></div><button className="flow-secondary" type="button" onClick={() => onEdit(selected.id)}><Icon name="edit" size={14} /> 编辑正文</button></header><ArticleBody article={selected} /><footer><button className="flow-secondary" type="button" disabled={pending} onClick={() => onChanges(selected)}>退回修改</button><button className="flow-primary" type="button" disabled={pending} onClick={() => onApprove(selected)}>{pending ? "正在处理…" : "审核通过，移入成稿库"}</button></footer></article>
-      </section> : <EmptyState title="审核队列已清空" detail="新文章生成完成后会自动出现在这里；已通过的文章请到成稿库查看。" />}
+        <article className="review-document"><header><div><span className="figma-tag">事实校验后生成</span><h2>{selected.title}</h2></div><button className="flow-secondary" type="button" onClick={() => onEdit(selected.id)}><Icon name="edit" size={14} /> 编辑正文</button></header>{selected.review?.auto_result && <section className={`quality-review-summary ${selected.review.auto_result.status === "fail" ? "is-failed" : ""}`}><strong>AI 质量审核：{selected.review.auto_result.status === "fail" ? "未通过，已拦截自动交付" : "通过"}</strong><span>{String(selected.review.auto_result.summary || "已检查事实可追溯、来源质量、标题一致性和正文完整性")}</span>{typeof selected.review.auto_result.score === "number" && <b>{selected.review.auto_result.score} 分</b>}</section>}<ArticleBody article={selected} /><footer><button className="flow-secondary" type="button" disabled={pending} onClick={() => onChanges(selected)}>退回修改</button><button className="flow-primary" type="button" disabled={pending} onClick={() => onApprove(selected)}>{pending ? "正在处理…" : "审核通过，移入成稿库"}</button></footer></article>
+      </section> : activeJobs.length ? <EmptyState title="文章正在生成" detail="无需重复创建任务；页面会自动刷新，生成完成后正文会出现在审核队列。" /> : failedJobs.length ? <EmptyState title="生成任务需要处理" detail="请先查看上方失败原因；补齐素材或配置后再重试。" /> : <EmptyState title="审核队列已清空" detail="新文章生成完成后会自动出现在这里；已通过的文章请到成稿库查看。" />}
     </main>
   );
 }

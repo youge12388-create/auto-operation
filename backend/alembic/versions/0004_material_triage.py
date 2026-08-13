@@ -1,8 +1,9 @@
 """Add an operator-facing lifecycle to collected source materials."""
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy import inspect
+
+from alembic import op
 
 revision = "0004_material_triage"
 down_revision = "0003_job_timing_fields"

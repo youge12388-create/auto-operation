@@ -1,7 +1,6 @@
 """Bootstrap the V1 schema from the SQLAlchemy metadata."""
 
 from alembic import op
-
 from content_ops.db import Base
 from content_ops.models import *  # noqa: F401,F403
 

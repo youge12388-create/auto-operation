@@ -34,6 +34,101 @@ class FakeProvider:
     """Deterministic provider for tests and the first vertical slice."""
 
     def complete(self, request: CompletionRequest) -> CompletionResponse:
+        if request.user.startswith("QUALITY_REVIEW_JSON"):
+            return CompletionResponse(
+                text=json.dumps(
+                    {
+                        "status": "pass",
+                        "score": 92,
+                        "summary": "deterministic quality review passed",
+                        "checks": {
+                            "fact_traceability": True,
+                            "source_quality": True,
+                            "title_alignment": True,
+                            "content_complete": True,
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                input_tokens=80,
+                output_tokens=80,
+            )
+        if request.user.startswith("MATERIAL_CLASSIFICATION_JSON"):
+            payload = json.loads(request.user.split("\n", 1)[1])
+            materials = payload.get("materials") or []
+            categories = payload.get("categories") or []
+            if not categories:
+                return CompletionResponse(text='{"materials": []}')
+            return CompletionResponse(
+                text=json.dumps(
+                    {
+                        "materials": [
+                            {
+                                "id": item["id"],
+                                "category_id": categories[index % len(categories)]["id"],
+                                "confidence": 86,
+                                "reason": "deterministic test classification",
+                            }
+                            for index, item in enumerate(materials)
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                input_tokens=80,
+                output_tokens=120,
+            )
+        if request.user.startswith("MATERIAL_CURATION_JSON"):
+            payload = json.loads(request.user.split("\n", 1)[1])
+            materials = payload.get("materials") or []
+            return CompletionResponse(
+                text=json.dumps(
+                    {
+                        "materials": [
+                            {
+                                "id": item["id"],
+                                "decision": "select",
+                                "score": 82,
+                                "reason": "deterministic test selection",
+                            }
+                            for item in materials[:4]
+                        ]
+                    },
+                    ensure_ascii=False,
+                ),
+                input_tokens=80,
+                output_tokens=120,
+            )
+        try:
+            topic_payload = json.loads(request.user)
+        except json.JSONDecodeError:
+            topic_payload = None
+        if isinstance(topic_payload, dict) and "topics" in (topic_payload.get("response_schema") or {}):
+            materials = topic_payload.get("materials") or []
+            if materials:
+                material_ids = [item["id"] for item in materials[:3]]
+                return CompletionResponse(
+                    text=json.dumps(
+                        {
+                            "topics": [
+                                {
+                                    "title": materials[0].get("title") or "自动推荐选题",
+                                    "rationale": "基于已精选素材的确定性测试推荐",
+                                    "material_ids": material_ids,
+                                    "score": 88,
+                                    "scores": {
+                                        "heat": 88,
+                                        "timeliness": 88,
+                                        "reader_value": 88,
+                                        "strategy_fit": 88,
+                                    },
+                                }
+                            ]
+                        },
+                        ensure_ascii=False,
+                    ),
+                    input_tokens=80,
+                    output_tokens=120,
+                )
         if request.user.startswith("MATERIAL_TRANSLATION_JSON"):
             title = request.user.split("TITLE:", 1)[1].split("\nCONTENT:", 1)[0].strip()
             content = request.user.split("\nCONTENT:\n", 1)[1].strip()

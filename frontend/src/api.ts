@@ -1,4 +1,4 @@
-import { buildChannelTestPath, buildWechatThumbPath, type WechatDraftPayload } from "./contracts";
+﻿import { buildChannelTestPath, buildWechatThumbPath, type WechatDraftPayload } from "./contracts";
 export type User = {
   id: string;
   email: string;
@@ -7,7 +7,7 @@ export type User = {
 export type Source = {
   id: string;
   name: string;
-  source_type: "rss" | "url" | "manual";
+  source_type: "rss" | "url" | "manual" | "aihot_api";
   url: string;
   group_name: string;
   group_id: string | null;
@@ -15,6 +15,18 @@ export type Source = {
   requires_review: boolean;
   config: Record<string, unknown>;
   last_error: string | null;
+};
+
+export type MaterialCategory = {
+  id: string;
+  name: string;
+  description: string;
+  classification_instructions: string;
+  enabled: boolean;
+  is_builtin: boolean;
+  material_count: number;
+  created_at: string | null;
+  updated_at: string | null;
 };
 
 export type Material = {
@@ -27,6 +39,13 @@ export type Material = {
   published_at: string | null;
   created_at: string | null;
   triage_status: "inbox" | "selected" | "ignored" | "used";
+  category_id: string | null;
+  category_name: string | null;
+  classification_status: "pending" | "classified" | "failed" | "unclassified";
+  classification_source: "ai" | "manual" | null;
+  classification_confidence: number | null;
+  classification_reason: string | null;
+  classification_error: string | null;
   ai_score?: number | null;
 };
 
@@ -60,8 +79,16 @@ export type StrategyCombination = {
 
 export type StrategyConfig = {
   source_ids?: string[];
+  material_category_ids?: string[];
   translate_foreign_sources?: boolean;
   channel_account_id?: string;
+  delivery_mode?: "local_draft" | "wechat_draft" | "auto_publish";
+  wechat_thumb_media_id?: string;
+  wechat_author?: string;
+  wechat_digest?: string;
+  content_source_url?: string;
+  need_open_comment?: boolean;
+  only_fans_can_comment?: boolean;
   theme_id?: string;
   theme_version?: number;
   model_by_stage?: Record<string, string>;
@@ -319,19 +346,40 @@ export const api = {
   addUser: (payload: { email: string; password: string; role: string }) =>
     request<User>("/api/v1/users", { method: "POST", body: JSON.stringify(payload) }),
   sources: () => request<Source[]>("/api/v1/sources"),
-  materials: (triageStatus?: string) => request<Material[]>(`/api/v1/materials${triageStatus ? `?triage_status=${encodeURIComponent(triageStatus)}` : ""}`),
+  materials: (triageStatus?: string, sourceId?: string, categoryId?: string) => {
+    const params = new URLSearchParams();
+    if (triageStatus) params.set("triage_status", triageStatus);
+    if (sourceId) params.set("source_id", sourceId);
+    if (categoryId) params.set("category_id", categoryId);
+    const query = params.toString();
+    return request<Material[]>(`/api/v1/materials${query ? `?${query}` : ""}`);
+  },
+  materialCategories: (includeDisabled = true) => request<MaterialCategory[]>(`/api/v1/material-categories?include_disabled=${includeDisabled}`),
+  addMaterialCategory: (payload: { name: string; description?: string; classification_instructions?: string; enabled?: boolean }) =>
+    request<MaterialCategory>("/api/v1/material-categories", { method: "POST", body: JSON.stringify(payload) }),
+  updateMaterialCategory: (id: string, payload: Partial<Pick<MaterialCategory, "name" | "description" | "classification_instructions" | "enabled">>) =>
+    request<MaterialCategory>(`/api/v1/material-categories/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
+  disableMaterialCategory: (id: string) => request<MaterialCategory>(`/api/v1/material-categories/${id}`, { method: "DELETE" }),
+  restoreMaterialCategory: (id: string) => request<MaterialCategory>(`/api/v1/material-categories/${id}/restore`, { method: "POST" }),
+  classifyMaterials: (payload: { material_ids?: string[]; retry_failed?: boolean } = {}) =>
+    request<{ candidate_count: number; classified_count: number; failed_count: number; message: string }>("/api/v1/materials/classify", { method: "POST", body: JSON.stringify(payload) }),
+  assignMaterialCategory: (id: string, categoryId: string | null) =>
+    request<Material>(`/api/v1/materials/${id}/category`, { method: "PUT", body: JSON.stringify({ category_id: categoryId }) }),
   material: (id: string) => request<MaterialDetail>(`/api/v1/materials/${id}`),
   triageMaterial: (id: string, decision: "save" | "ignore" | "reopen") =>
     request<Material>(`/api/v1/materials/${id}/triage`, { method: "POST", body: JSON.stringify({ decision }) }),
+  curateMaterials: (payload: { strategy_id: string; material_ids?: string[]; limit?: number }) =>
+    request<{ candidate_count: number; selected_count: number; selected_ids: string[]; selected_titles: string[]; message: string }>("/api/v1/materials/curate", { method: "POST", body: JSON.stringify(payload) }),
   createTopicFromMaterial: (id: string, payload: { strategy_id: string; title?: string }) =>
     request<Topic>(`/api/v1/materials/${id}/topics`, { method: "POST", body: JSON.stringify(payload) }),
   createTopicFromMaterials: (payload: { strategy_id: string; material_ids: string[]; title?: string }) =>
     request<Topic>("/api/v1/topics/from-materials", { method: "POST", body: JSON.stringify(payload) }),
-  startTopicWriting: (id: string) => request<Job>(`/api/v1/topics/${id}/start-writing`, { method: "POST" }),
+  startTopicWriting: (id: string, payload?: { writing_skill_id?: string; disable_writing_skill?: boolean }) => request<Job>(`/api/v1/topics/${id}/start-writing`, { method: "POST", body: JSON.stringify(payload || {}) }),
   addSource: (payload: Partial<Source>) => request<Source>("/api/v1/sources", { method: "POST", body: JSON.stringify(payload) }),
   addManualMaterial: (payload: { title: string; content: string; source_name?: string }) =>
     request<Material>("/api/v1/materials/manual", { method: "POST", body: JSON.stringify(payload) }),
-  collectSource: (id: string) => request<{ source_id: string; count: number; item_ids: string[] }>(`/api/v1/sources/${id}/collect`, { method: "POST" }),
+  collectSource: (id: string) => request<{ source_id: string; count: number; item_ids: string[]; classified_count: number; classification_failed_count: number }>(`/api/v1/sources/${id}/collect`, { method: "POST" }),
+  updateSource: (id: string, payload: Source) => request<Source>(`/api/v1/sources/${id}`, { method: "PUT", body: JSON.stringify(payload) }),
   disableSource: (id: string) => request<Source>(`/api/v1/sources/${id}`, { method: "DELETE" }),
   strategies: () => request<Strategy[]>("/api/v1/strategies"),
   addStrategy: (payload: StrategyPayload) =>
@@ -358,8 +406,8 @@ export const api = {
   copyTheme: (id: string, payload: { name: string; slug: string }) =>
     request<Theme>(`/api/v1/themes/${id}/copy`, { method: "POST", body: JSON.stringify(payload) }),
   disableTheme: (id: string) => request<Theme>(`/api/v1/themes/${id}`, { method: "DELETE" }),
-  previewTheme: (articleId: string, revisionId: string, themeId: string) =>
-    request<ThemePreview>(`/api/v1/articles/${articleId}/revisions/${revisionId}/themes/${themeId}/preview`, { method: "POST" }),
+  previewTheme: (articleId: string, revisionId: string, themeId: string, mode: "deterministic" | "ai" = "deterministic") =>
+    request<ThemePreview>(`/api/v1/articles/${articleId}/revisions/${revisionId}/themes/${themeId}/preview?mode=${mode}`, { method: "POST" }),
   topicAlgorithms: () => request<TopicAlgorithm[]>("/api/v1/topic-algorithms"),
   addTopicAlgorithm: (payload: TopicAlgorithmPayload) =>
     request<TopicAlgorithm>("/api/v1/topic-algorithms", { method: "POST", body: JSON.stringify(payload) }),
@@ -443,3 +491,4 @@ if (!response.ok) {
   reviewArticle: (articleId: string, revisionId: string, decision: "approve" | "reject" | "request_changes", comment = "") =>
     request<Review>(`/api/v1/articles/${articleId}/revisions/${revisionId}/review`, { method: "POST", body: JSON.stringify({ decision, comment }) }),
 };
+

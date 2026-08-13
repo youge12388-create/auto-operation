@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { api, type StrategyConfig } from "../src/api";
-import { mergeCombinationConfig } from "../src/StrategyPipelinePage";
+import { isReviewFailureStatus } from "../src/ContentFlowPages";
+import { dailyTime, mergeCombinationConfig, sanitizeCombinationConfig, scheduleMode, validatedSchedule } from "../src/StrategyPipelinePage";
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -25,6 +26,23 @@ describe("strategy combination contracts", () => {
     });
   });
 
+  it("keeps retryable generation failures visible in the review queue", () => {
+    expect(isReviewFailureStatus("failed_retryable")).toBe(true);
+    expect(isReviewFailureStatus("running")).toBe(false);
+  });
+  it("removes hidden WeChat settings from a local-draft combination", () => {
+    expect(sanitizeCombinationConfig({
+      delivery_mode: "local_draft",
+      channel_account_id: "missing-account",
+      wechat_thumb_media_id: "unused-cover",
+    })).toEqual({ delivery_mode: "local_draft" });
+  });
+  it("requires a concrete Beijing-time clock value for daily scheduling", () => {
+    expect(scheduleMode("daily@09:30")).toBe("daily");
+    expect(dailyTime("daily@09:30")).toBe("09:30");
+    expect(validatedSchedule("daily@09:30")).toBe("daily@09:30");
+    expect(() => validatedSchedule("daily")).toThrow("每日运行必须设置固定时刻");
+  });
   it("sends the selected combination when manually trial-running a pipeline", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,

@@ -54,6 +54,18 @@ def test_strategy_config_rejects_core_step_and_invalid_review_rule():
         raise AssertionError("topic recommendation count must be validated")
 
 
+def test_local_draft_discards_irrelevant_wechat_delivery_fields():
+    configured = validate_strategy_config(
+        {
+            "delivery_mode": "local_draft",
+            "channel_account_id": "missing-account",
+            "wechat_thumb_media_id": "unused-cover",
+        }
+    )
+
+    assert configured["channel_account_id"] is None
+    assert configured["wechat_thumb_media_id"] is None
+
 def test_workflow_applies_stage_models_skills_and_optional_steps(db):
     writing_model = ModelConfig(provider="fake", name="writing-fake")
     rewrite_model = ModelConfig(provider="fake", name="rewrite-fake")
@@ -119,7 +131,7 @@ def test_workflow_applies_stage_models_skills_and_optional_steps(db):
     assert style_step is not None
     assert style_step.status == "skipped"
     stages = [item.stage for item in db.scalars(select(ModelCallLog).where(ModelCallLog.job_id == job.id)).all()]
-    assert stages == ["writing", "rewrite"]
+    assert stages == ["material_curation", "topic_recommendation", "writing", "rewrite", "review"]
 
 
 def test_edited_revision_is_the_one_sent_to_local_draft_after_approval(db):
@@ -130,6 +142,7 @@ def test_edited_revision_is_the_one_sent_to_local_draft_after_approval(db):
         config_json={"title": "旧标题", "content": "需要编辑的事实。"},
     )
     strategy = Strategy(name="编辑恢复", objective="验证新版本恢复")
+    strategy.config_json = {"review_rules": {"human_review_required": True}}
     reviewer = User(email="reviewer@example.com", password_hash=hash_password("reviewer-password-123"), role="reviewer")
     db.add_all([source, strategy, reviewer])
     db.commit()
@@ -172,6 +185,11 @@ def test_edited_revision_is_the_one_sent_to_local_draft_after_approval(db):
     )
     assert latest is not None
     assert latest.id == revision.id
+    expected_content = (
+        "# \u4eba\u5de5\u4fee\u8ba2\u7248\u672c\n\n"
+        "\u4fdd\u7559\u5df2\u786e\u8ba4\u4e8b\u5b9e\u3002"
+    )
+    assert latest.content_markdown == expected_content
     assert (
         db.scalar(select(JobStep).where(JobStep.job_id == job.id, JobStep.step_name == "draft")).output_json[
             "revision_id"
@@ -182,7 +200,7 @@ def test_edited_revision_is_the_one_sent_to_local_draft_after_approval(db):
     assert archived.status == "archived"
 
 
-def test_published_khazix_writer_is_the_default_writing_skill(db):
+def test_unconfigured_strategy_does_not_fall_back_to_default_skill(db):
     default_skill = Skill(
         name="khazix-writer",
         skill_type="writing",
@@ -191,10 +209,57 @@ def test_published_khazix_writer_is_the_default_writing_skill(db):
         manifest_json={"name": "khazix-writer", "type": "writing", "version": "1.0.0"},
         prompt="使用卡兹克公众号长文风格。",
     )
-    strategy = Strategy(name="默认写作 Skill", objective="验证默认 Skill")
+    strategy = Strategy(name="未配置写作 Skill", objective="验证不默认套用")
     db.add_all([default_skill, strategy])
     db.commit()
 
-    assert skill_for_stage(db, strategy, "writing") is default_skill
+    assert skill_for_stage(db, strategy, "writing") is None
     assert skill_for_stage(db, strategy, "rewrite") is None
     assert skill_for_stage(db, strategy, "review") is None
+
+
+def test_job_execution_override_sets_writing_skill_without_fallback(db):
+    default_skill = Skill(
+        name="khazix-writer",
+        skill_type="writing",
+        version="1.0.0",
+        status="published",
+        manifest_json={"name": "khazix-writer", "type": "writing", "version": "1.0.0"},
+        prompt="使用卡兹克公众号长文风格。",
+    )
+    override_skill = Skill(
+        name="my-writer",
+        skill_type="writing",
+        version="1.0.0",
+        status="published",
+        manifest_json={"name": "my-writer", "type": "writing", "version": "1.0.0"},
+        prompt="使用我的通用写作风格。",
+    )
+    source = Source(
+        name="手动资料",
+        source_type="manual",
+        url="https://example.com/skill-override",
+        config_json={"title": "某 AI 产品更新", "content": "官方公告确认产品已发布。"},
+    )
+    strategy = Strategy(name="Skill 覆盖策略", objective="测试写作 Skill 覆盖")
+    strategy.config_json = {"review_rules": {"human_review_required": True}}
+    db.add_all([default_skill, override_skill, source, strategy])
+    db.commit()
+
+    plain_job = create_job(db, strategy, "skill-plain")
+    plain = run_job(db, plain_job.id, FakeProvider())
+    assert plain.status == "waiting_review"
+    plain_article = db.scalar(select(Article).where(Article.job_id == plain_job.id))
+    assert "writing" not in (plain_article.skill_snapshot or {}).get("stages", {})
+
+    overridden_job = create_job(
+        db,
+        strategy,
+        "skill-override",
+        execution_config_override={"skill_by_stage": {"writing": override_skill.id}, "skill_ids": []},
+    )
+    overridden = run_job(db, overridden_job.id, FakeProvider())
+    assert overridden.status == "waiting_review"
+    overridden_article = db.scalar(select(Article).where(Article.job_id == overridden_job.id))
+    assert overridden_article.skill_snapshot["stages"]["writing"]["name"] == "my-writer"
+    assert overridden_article.skill_snapshot["stages"]["writing"]["id"] == override_skill.id

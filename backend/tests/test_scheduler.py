@@ -5,18 +5,31 @@ from sqlalchemy import select
 from content_ops.api import add_strategy, update_strategy
 from content_ops.models import Article, Job, ModelConfig, Source, Strategy, StrategyVersion
 from content_ops.providers import FakeProvider
-from content_ops.scheduler import enqueue_due_jobs, schedule_window
+from content_ops.scheduler import enqueue_due_jobs, normalize_schedule, schedule_window
 from content_ops.schemas import StrategyCreate
 from content_ops.workflow import run_job
 
 
-def test_schedule_window_supports_manual_hourly_daily():
+def test_schedule_window_supports_manual_hourly_daily_and_daily_at():
     now = datetime(2026, 7, 27, 8, 30, tzinfo=timezone.utc)
     assert schedule_window("manual", now) is None
     assert schedule_window("hourly", now) == "hourly:2026072708"
     assert schedule_window("daily", now) == "daily:20260727"
     assert schedule_window("unknown", now) is None
+    assert schedule_window("daily@09:00", datetime(2026, 7, 27, 0, 59, tzinfo=timezone.utc)) is None
+    assert schedule_window("daily@09:00", datetime(2026, 7, 27, 1, 0, tzinfo=timezone.utc)) == "daily:20260727"
+    assert schedule_window("daily@09:00", datetime(2026, 7, 27, 2, 30, tzinfo=timezone.utc)) == "daily:20260727"
+    assert normalize_schedule(" DAILY@09:00 ") == "daily@09:00"
 
+
+
+def test_normalize_schedule_rejects_invalid_fixed_daily_time():
+    try:
+        normalize_schedule("daily@24:00")
+    except ValueError as exc:
+        assert "daily@HH:MM" in str(exc)
+    else:
+        raise AssertionError("invalid fixed daily time must be rejected")
 
 def test_enqueue_due_jobs_is_idempotent(db):
     source = Source(
@@ -26,6 +39,7 @@ def test_enqueue_due_jobs_is_idempotent(db):
         config_json={"title": "Scheduled title", "content": "Scheduled facts"},
     )
     strategy = Strategy(name="daily", objective="scheduled", schedule="daily", enabled=True)
+    strategy.config_json = {"review_rules": {"human_review_required": True}}
     manual = Strategy(name="manual", objective="manual", schedule="manual", enabled=True)
     model = ModelConfig(provider="fake", name="scheduler-translation-model")
     db.add_all([source, strategy, manual, model])

@@ -2,9 +2,9 @@
 import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import App from "./ConsoleRoot";
-import "./candy.css";
 import "./figma.css";
 import "./login-stitch.css";
+import "./ui-motion.css";
 
 const client = new QueryClient();
 
