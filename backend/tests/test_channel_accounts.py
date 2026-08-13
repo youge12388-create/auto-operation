@@ -167,3 +167,4 @@ def test_draft_uses_selected_theme_without_changing_revision(monkeypatch, db):
     assert "style=" in received[0]
     assert revision.content_markdown == "# 标题\n\n正文"
     assert result.response_json["theme_id"] == theme.id
+

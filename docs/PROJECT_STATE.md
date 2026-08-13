@@ -1,4 +1,4 @@
-# PROJECT_STATE
+﻿# PROJECT_STATE
 
 ## 2026-08-06 Frontend visual redesign (Content Ops)
 
@@ -160,3 +160,6 @@
 - Approving an article now selects it and opens the approved library immediately. Editing a library article creates a new revision, can update its title, and returns it to the review queue before delivery.
 - Library deletion is a recoverable local archive. Remote WeChat drafts and published content are explicitly preserved.
 - WeChat error 40164 is translated into an actionable IP-whitelist instruction using the IP returned by WeChat; credentials and whitelist settings are not changed automatically.
+
+
+

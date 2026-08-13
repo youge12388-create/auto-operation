@@ -268,7 +268,61 @@ COMPONENT_PRESETS: dict[str, dict[str, str]] = {
     },
     "graphite-minimal": {
         "cover": '<section style="margin:0 0 32px;padding:36px 18px;border-top:1px solid #E4E4E7;border-bottom:1px solid #E4E4E7;text-align:center;"><p style="margin:0 0 14px;font-size:10px;font-weight:600;letter-spacing:4px;color:#A1A1AA;">GRAPHITE · 现代极简</p><h1 style="margin:0;font-size:24px;font-weight:800;color:#27272A;line-height:1.4;letter-spacing:-0.5px;">{title}</h1></section>',  # noqa: E501
-        "section_title": '<section style="margin:40px 0 16px;"><p style="margin:0 0 2px;font-size:52px;font-weight:900;color:#E4E4E7;line-height:0.9;letter-spacing:-2px;">{num}</p><h2 style="margin:8px 0 0;font-size:20px;font-weight:800;color:#27272A;line-height:1.4;padding-bottom:10px;border-bottom:1px solid #E4E4E7;">{title}</h2></sec…2536 tokens truncated…E9D5FF;font-size:13px;line-height:1.8;overflow-x:auto;color:#5B3A8C;">{code}</section>',
+        "section_title": '<section style="margin:40px 0 16px;"><p style="margin:0 0 2px;font-size:52px;font-weight:900;color:#E4E4E7;line-height:0.9;letter-spacing:-2px;">{num}</p><h2 style="margin:8px 0 0;font-size:20px;font-weight:800;color:#27272A;line-height:1.4;padding-bottom:10px;border-bottom:1px solid #E4E4E7;">{title}</h2></section>',  # noqa: E501
+        "subsection_title": '<p style="margin:28px 0 14px;font-size:15px;font-weight:800;color:#27272A;line-height:1.4;padding-left:12px;border-left:3px solid #52525B;">{title}</p>',  # noqa: E501
+        "quote": '<section style="margin:0 0 26px;border-left:3px solid #52525B;padding:14px 0 14px 22px;">{content}</section>',  # noqa: E501
+        "ending": '<section style="margin:32px 0 0;text-align:center;"><span style="display:inline-block;width:40px;height:1px;background:#E4E4E7;"><br></span><p style="margin:12px 0 0;font-size:10px;font-weight:600;letter-spacing:4px;color:#A1A1AA;">END</p></section>',  # noqa: E501
+    },
+    "zen-whitespace": {
+        "cover": '<section style="margin:0 0 36px;padding:36px 18px;border-top:1px solid #E8E8E8;border-bottom:1px solid #E8E8E8;text-align:center;"><p style="margin:0 0 14px;font-size:10px;font-weight:600;letter-spacing:4px;color:#4A5D52;">ZEN · 留白禅意</p><h1 style="margin:0;font-family:\'Noto Serif SC\',Georgia,\'Times New Roman\',serif;font-size:22px;font-weight:600;color:#2B2B2B;line-height:1.5;letter-spacing:0.8px;">{title}</h1></section>',  # noqa: E501
+        "section_title": '<section style="margin:48px 0 18px;"><p style="margin:0 0 10px;font-size:10px;color:#4A5D52;font-weight:600;letter-spacing:4px;">{num} · CHAPTER</p><h2 style="margin:0 0 14px;font-family:\'Noto Serif SC\',Georgia,\'Times New Roman\',serif;font-size:21px;font-weight:700;color:#2B2B2B;line-height:1.4;letter-spacing:0.5px;">{title}</h2><span style="display:inline-block;width:40px;height:2px;background:#4A5D52;"><br></span></section>',  # noqa: E501
+        "subsection_title": '<p style="margin:32px 0 12px;font-size:16px;font-weight:600;color:#2B2B2B;line-height:1.5;letter-spacing:0.3px;">{title}</p>',  # noqa: E501
+        "quote": '<section style="margin:36px 0;padding:32px 18px;border-top:1px solid #E8E8E8;border-bottom:1px solid #E8E8E8;text-align:center;">{content}</section>',  # noqa: E501
+        "ending": '<section style="margin:40px 0 0;border-top:1px solid #E8E8E8;padding:16px 0 4px;text-align:center;"><p style="margin:0;font-size:10px;font-weight:500;letter-spacing:5px;color:#A3A3A3;">FIN</p></section>',  # noqa: E501
+    },
+    "moyu-ticket": {
+        "cover": '<section style="margin:0 0 28px;background:#fffef8;border:2px solid #1a1a1a;box-shadow:4px 4px 0 #1a1a1a;overflow:hidden;"><section style="background:#059669;padding:10px 18px;display:flex;justify-content:space-between;align-items:center;"><span style="font-size:10px;font-weight:700;letter-spacing:2px;color:#fff;">TICKET · 深度测评</span><span style="font-size:10px;font-weight:700;color:rgba(255,255,255,0.85);">001</span></section><section style="padding:22px 18px 20px;"><h1 style="margin:0 0 10px;font-size:23px;font-weight:900;color:#1a1a1a;line-height:1.3;">{title}</h1><span style="display:inline-block;width:36px;height:3px;background:#059669;"><br></span></section></section>',  # noqa: E501
+        "section_title": '<section style="margin:32px 0 14px;"><section style="display:flex;align-items:center;gap:12px;"><span style="background:#1a1a1a;color:#fff;font-size:12px;font-weight:800;padding:4px 10px;border-radius:4px;">{num}</span><h2 style="margin:0;font-size:20px;font-weight:800;color:#1a1a1a;line-height:1.4;">{title}</h2></section></section>',  # noqa: E501
+        "subsection_title": '<p style="margin:24px 0 10px;font-size:16px;font-weight:800;color:#1a1a1a;line-height:1.5;"><span style="border-bottom:2px solid #A7F3D0;padding-bottom:2px;">{title}</span></p>',  # noqa: E501
+        "quote": '<section style="margin:0 0 22px;background:#F0FDF4;border:1px dashed #A7F3D0;border-radius:8px;padding:12px 16px;">{content}</section>',  # noqa: E501
+        "ending": '<section style="margin:28px 0 0;border-top:2px dashed #A7F3D0;padding:14px 0 4px;text-align:center;"><p style="margin:0;font-size:11px;font-weight:800;letter-spacing:4px;color:#1a1a1a;">- END OF TICKET -</p></section>',  # noqa: E501
+    },
+    "olive-journal": {
+        "cover": '<section style="margin:0 0 26px;background:#fdfdf8;border:1px solid #bfc1b7;border-radius:6px;overflow:hidden;"><section style="padding:24px 20px 18px;"><section style="display:flex;align-items:center;gap:8px;margin-bottom:18px;"><span style="width:8px;height:8px;background:#1e1f23;border-radius:50%;"><br></span><span style="font-size:10px;font-weight:700;letter-spacing:3px;color:#65675e;">内刊手记</span><span style="flex:1;height:1px;background:#bfc1b7;"><br></span></section><h1 style="margin:0;font-size:23px;font-weight:800;color:#23251d;line-height:1.35;">{title}</h1></section><section style="background:#1e1f23;padding:10px 20px;"><p style="margin:0;font-size:11px;font-weight:700;letter-spacing:2px;color:#fff;">OLIVE JOURNAL · 编辑部内刊</p></section></section>',  # noqa: E501
+        "section_title": '<section style="margin:32px 0 14px;"><section style="display:flex;align-items:center;gap:14px;"><section style="text-align:center;flex-shrink:0;"><p style="margin:0;font-size:24px;font-weight:800;color:#23251d;line-height:1;letter-spacing:-2px;">{num}</p><p style="margin:0;font-size:8px;font-weight:700;color:#9ea096;letter-spacing:2px;">PART</p></section><span style="width:1px;height:32px;background:#bfc1b7;"><br></span><section><p style="margin:0;font-size:17px;font-weight:800;color:#23251d;letter-spacing:0.2px;">{title}</p><p style="margin:0;font-size:11px;font-weight:600;color:#65675e;letter-spacing:1.2px;">OLIVE JOURNAL</p></section></section></section>',  # noqa: E501
+        "subsection_title": '<p style="margin:24px 0 10px;font-size:16px;font-weight:800;color:#23251d;line-height:1.5;padding-left:10px;border-left:3px solid #ed7b2f;">{title}</p>',  # noqa: E501
+        "quote": '<section style="margin:0 0 22px;background:#fdfdf8;border-radius:6px;padding:14px 16px;border:1px solid #bfc1b7;">{content}</section>',  # noqa: E501
+        "ending": '<section style="margin:28px 0 0;background:#1e1f23;border-radius:6px;padding:16px 18px;text-align:center;"><p style="margin:0;font-size:12px;font-weight:800;letter-spacing:3px;color:#fff;">FIN · 编辑部</p></section>',  # noqa: E501
+    },
+    "aws-classic-blue": {
+        "cover": '<section style="margin:0 0 24px;text-align:center;"><h1 style="margin:0;font-size:22px;font-weight:bold;color:#1A6DB5;border-bottom:2px solid #1A6DB5;padding-bottom:10px;line-height:1.4;">{title}</h1></section>',
+        "section_title": '<section style="margin:2em 0 0;"><h2 style="display:inline-block;margin:0;font-size:17px;font-weight:bold;color:#fff;background:#1A6DB5;padding:5px 14px 4px;border-top-left-radius:3px;border-top-right-radius:3px;border-bottom:2px solid #14527D;line-height:1.4;">{title}</h2></section>',
+        "subsection_title": '<h3 style="margin:1.5em 0 0.8em;font-size:16px;font-weight:bold;color:#1A6DB5;padding-left:10px;border-left:3px solid #1A6DB5;line-height:1.5;">{title}</h3>',
+        "minor_title": '<h4 style="margin:1.2em 0 0.6em;font-size:15px;font-weight:bold;color:#444;line-height:1.5;">{title}</h4>',
+        "paragraph": '<p style="margin:10px 0;font-size:16px;line-height:1.8;text-align:justify;color:#3A3A3A;letter-spacing:0.5px;">{content}</p>',
+        "bullet_list": '<ul style="padding-left:20px;margin:0.6em 0;">{items}</ul>',
+        "bullet_item": '<li style="margin-bottom:6px;line-height:1.75;color:#3A3A3A;">{content}</li>',
+        "ordered_list": '<ol style="padding-left:20px;margin:0.6em 0;">{items}</ol>',
+        "ordered_item": '<li style="margin-bottom:6px;line-height:1.75;color:#3A3A3A;">{content}</li>',
+        "quote": '<blockquote style="margin:1.2em 0;border-left:4px solid #1A6DB5;background:#F7FBFF;padding:14px 16px;color:#555;">{content}</blockquote>',
+        "code_block": '<section style="margin:1em 0;background:#0F2A44;color:#93C5FD;padding:16px;border-radius:10px;font-size:13px;line-height:1.8;overflow-x:auto;box-shadow:0 8px 24px rgba(0,0,0,0.2);">{code}</section>',
+        "code_line": '<p style="margin:0;font-family:\'SF Mono\',Consolas,Monaco,monospace;font-size:13px;line-height:1.8;color:#93C5FD;">{code}</p>',
+        "image": '<img src="{src}" alt="{alt}" style="max-width:100%;border-radius:5px;display:block;margin:0 auto;box-shadow:#84A1A8 0 6px 12px;">',
+        "divider": '<section style="margin:2em 0;height:1px;background:linear-gradient(to right,rgba(26,109,181,0),rgba(26,109,181,0.6),rgba(26,109,181,0));"><br></section>',
+        "ending": '',
+    },
+    "aws-elegant-purple": {
+        "cover": '<section style="margin:0 0 24px;text-align:center;"><h1 style="margin:0;font-size:22px;font-weight:bold;color:#595959;line-height:1.4;">{title}</h1></section>',
+        "section_title": '<h2 style="margin:2em 0 1em;font-size:18px;font-weight:bold;color:#595959;padding-left:10px;border-left:5px solid #DEC6FB;line-height:1.4;">{title}</h2>',
+        "subsection_title": '<section style="margin:1.5em 0 0.8em;text-align:center;"><h3 style="display:inline-block;margin:0;font-size:16px;font-weight:bold;color:#595959;border-bottom:2px solid #DEC6FB;padding-bottom:4px;line-height:1.5;">{title}</h3></section>',
+        "minor_title": '<h4 style="margin:1.2em 0 0.6em;font-size:15px;font-weight:bold;color:#595959;line-height:1.5;">{title}</h4>',
+        "paragraph": '<p style="margin:10px 0;font-size:16px;line-height:1.75;text-align:justify;color:#595959;letter-spacing:2px;">{content}</p>',
+        "bullet_list": '<ul style="padding-left:20px;margin:0.6em 0;list-style-type:circle;">{items}</ul>',
+        "bullet_item": '<li style="margin-bottom:6px;line-height:1.75;color:#595959;font-size:16px;">{content}</li>',
+        "ordered_list": '<ol style="padding-left:20px;margin:0.6em 0;">{items}</ol>',
+        "ordered_item": '<li style="margin-bottom:6px;line-height:1.75;color:#595959;font-size:16px;">{content}</li>',
+        "quote": '<blockquote style="margin:1.2em 0;border:1px solid #DEC6FB;background:#F6EEFF;padding:15px 20px;border-radius:6px;color:#595959;">{content}</blockquote>',
+        "code_block": '<section style="margin:1em 0;background:#F9F5FF;padding:16px;border-radius:10px;border:1px solid #E9D5FF;font-size:13px;line-height:1.8;overflow-x:auto;color:#5B3A8C;">{code}</section>',
         "code_line": '<p style="margin:0;font-family:\'SF Mono\',Consolas,Monaco,monospace;font-size:13px;line-height:1.8;color:#5B3A8C;">{code}</p>',
         "image": '<img src="{src}" alt="{alt}" style="max-width:100%;border-radius:6px;display:block;margin:20px auto;">',
         "divider": '<section style="margin:2em 0;border-top:2px solid #DEC6FB;"><br></section>',

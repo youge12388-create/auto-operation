@@ -1,4 +1,4 @@
-import pytest
+﻿import pytest
 from sqlalchemy import select
 
 from content_ops.models import (
@@ -149,3 +149,5 @@ def test_render_mode_ai_falls_back_on_invalid_html(db):
     ).all()
     assert len(fallbacks) == 1
     assert "不合规" in (fallbacks[0].payload_json or {}).get("reason", "")
+
+
