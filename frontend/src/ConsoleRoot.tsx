@@ -77,7 +77,7 @@ function Login({ onSuccess }: { onSuccess: (user: User) => void }) {
           <span className="login-eyebrow">WELCOME BACK</span>
           <h2>欢迎回来</h2>
           <p>登录 AI 自动内容运营系统，继续高效运营</p>
-          <Form layout="vertical" initialValues={{ email: "admin@example.com", password: "admin" }} onFinish={(values) => login.mutate(values)}>
+          <Form layout="vertical" onFinish={(values) => login.mutate(values)}>
             <Form.Item label="邮箱" name="email" rules={[{ required: true, type: "email", message: "请输入有效邮箱" }]}>
               <Input size="large" prefix={<Icon name="mail" size={18} />} placeholder="name@company.com" />
             </Form.Item>

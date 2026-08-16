@@ -12,3 +12,12 @@ def test_listener_none_on_sqlite(monkeypatch):
     """create_listener returns None when using SQLite (no LISTEN/NOTIFY)."""
     monkeypatch.setattr(queueing.get_settings(), "database_url", "sqlite:///./test.db")
     assert queueing.create_listener() is None
+
+
+def test_postgres_sqlalchemy_url_is_normalized_for_psycopg(monkeypatch):
+    monkeypatch.setattr(
+        queueing.get_settings(),
+        "database_url",
+        "postgresql+psycopg://user:secret@db:5432/content_ops?sslmode=require",
+    )
+    assert queueing._dsn() == "postgresql://user:secret@db:5432/content_ops?sslmode=require"

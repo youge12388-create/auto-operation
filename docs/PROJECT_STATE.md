@@ -58,7 +58,13 @@
 - Material categories support create, edit, disable, restore, counts, and filtering. Source settings support edit, disable, and restore; ignored materials remain recoverable.
 - Automatic combinations now select material-pool categories. Each run performs model-backed curation and topic recommendation, then freezes the category scope, selected material IDs, and chosen topic in the job/article runtime snapshot. Legacy `source_ids` configurations still run.
 - Manual creation exposes queued/running/failed progress in the review page. Model quality review is persisted; a failed quality review always pauses at `waiting_review` and cannot reach delivery.
-- Delivery modes are `local_draft`, `wechat_draft`, and `auto_publish`. Existing and new unconfigured strategies remain `local_draft`. Automatic publication requires an explicit combination mode, no human review gate, a publish-capable account, a permanent cover media ID, a passing AI quality review, and the server-wide `AUTO_PUBLISH_ENABLED` switch. With the switch off, `auto_publish` stops safely after a successful WeChat draft.
+- Delivery modes are `local_draft`, `wechat_draft`, and `auto_publish`. Existing and new unconfigured strategies remain `local_draft`. Automatic publication requires an explicit combination mode, a publish-capable account, a permanent cover media ID, an AI review pass at or above the configured score threshold (75 by default), all mandatory checks, a successful Tavily-backed fact-verification report, and the server-wide `AUTO_PUBLISH_ENABLED` switch. Failed, unavailable, or incomplete verification enters human review and creates no automated WeChat draft. With the switch off, a verified `auto_publish` run stops safely after a successful WeChat draft.
+
+## Production prerequisites
+
+- Terminate TLS before the application and keep `COOKIE_SECURE=true`.
+- Start the dedicated Worker service; API requests only enqueue work.
+- Set `TAVILY_API_KEY` to enable online fact verification. Without it, automatic publication fails closed into human review.
 - WeChat draft retries and updates use revision/account idempotency keys. The approved library calls the update endpoint for an existing WeChat draft instead of creating a duplicate draft.
 - Alembic revision `0008_material_categories` is additive and reversible. It was applied to the local development database on 2026-08-05 after backup.
 ## 2026-07-31 Strategy-combination automation

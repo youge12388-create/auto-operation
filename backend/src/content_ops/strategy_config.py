@@ -108,7 +108,14 @@ def validate_strategy_config(config: dict[str, Any] | None) -> dict[str, Any]:
         raise StrategyConfigError("review_rules 必须是对象")
     if "human_review_required" in review_rules and not isinstance(review_rules["human_review_required"], bool):
         raise StrategyConfigError("review_rules.human_review_required 必须是布尔值")
-    normalized["review_rules"] = {"human_review_required": False, **review_rules}
+    score = review_rules.get("ai_review_min_score", 75)
+    if isinstance(score, bool) or not isinstance(score, (int, float)) or not 0 <= score <= 100:
+        raise StrategyConfigError("review_rules.ai_review_min_score must be a number from 0 to 100")
+    normalized["review_rules"] = {
+        "human_review_required": False,
+        "ai_review_min_score": float(score),
+        **review_rules,
+    }
     if delivery_mode == "auto_publish" and normalized["review_rules"]["human_review_required"]:
         raise StrategyConfigError("自动正式发布必须关闭人工审核门，并使用自动质量审核")
     if delivery_mode in {"wechat_draft", "auto_publish"}:

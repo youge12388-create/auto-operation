@@ -2,7 +2,7 @@ import pytest
 from fastapi import HTTPException
 
 from content_ops.api import add_channel_account, publish_wechat_article
-from content_ops.models import Article, ArticleRevision, Job, Publication, Strategy, User
+from content_ops.models import Article, ArticleRevision, Job, Publication, Review, Strategy, User
 from content_ops.schemas import ChannelAccountCreate, WechatPublishRequest
 
 
@@ -80,6 +80,7 @@ def test_publish_uses_idempotency_and_bound_account(monkeypatch, db):
             remote_id="draft-1",
         )
     )
+    db.add(Review(article_revision_id=revision.id, status="approved", auto_result_json={}))
     db.commit()
     calls: list[str] = []
 

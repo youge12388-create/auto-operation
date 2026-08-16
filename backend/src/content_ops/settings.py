@@ -1,7 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -26,6 +26,16 @@ class Settings(BaseSettings):
     wechat_api_base_url: str = "https://api.weixin.qq.com"
     wechat_timeout_seconds: float = Field(default=30.0, gt=0, le=120)
     auto_publish_enabled: bool = False
+    tavily_api_key: str | None = None
+    tavily_api_base_url: str = "https://api.tavily.com"
+    tavily_timeout_seconds: float = Field(default=20.0, gt=0, le=60)
+    fact_verification_max_claims: int = Field(default=8, ge=1, le=20)
+
+    @model_validator(mode="after")
+    def require_secure_production_cookie(self) -> "Settings":
+        if self.app_env == "production" and not self.cookie_secure:
+            raise ValueError("COOKIE_SECURE must be enabled in production")
+        return self
 
 
 def _resolve_sqlite_url(database_url: str) -> str:

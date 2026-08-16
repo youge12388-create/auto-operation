@@ -153,6 +153,10 @@ def test_auto_publish_workflow_skips_human_review_after_quality_passes(monkeypat
 
     monkeypatch.setattr("content_ops.delivery.wechat_client_for_account", lambda _: FakeClient())
     monkeypatch.setattr("content_ops.delivery.get_settings", lambda: SimpleNamespace(auto_publish_enabled=True))
+    monkeypatch.setattr(
+        "content_ops.workflow.verify_evidence",
+        lambda *_: {"verification_status": "verified", "summary": "verified", "claims": [], "sources": []},
+    )
     job = create_job(db, strategy, "workflow-publish-job")
     result = run_job(db, job.id, FakeProvider())
     article = db.query(Article).filter(Article.job_id == job.id).one()
@@ -174,7 +178,7 @@ class FailingQualityProvider:
             )
         return FakeProvider().complete(request)
 
-def test_failed_ai_quality_review_is_advisory_and_does_not_block_delivery(monkeypatch, db):
+def test_failed_ai_quality_review_waits_for_human_review_before_auto_publish(monkeypatch, db):
     account = ChannelAccount(
         name="quality-guard-account",
         enabled=True,
@@ -225,12 +229,12 @@ def test_failed_ai_quality_review_is_advisory_and_does_not_block_delivery(monkey
     result = run_job(db, job.id, FailingQualityProvider())
     article = db.query(Article).filter(Article.job_id == job.id).one()
 
-    assert result.status == "succeeded"
-    assert article.status == "wechat_draft"
+    assert result.status == "waiting_review"
+    assert article.status == "waiting_review"
     assert article.revisions[-1].review.auto_result_json["status"] == "fail"
-    assert article.revisions[-1].review.status == "auto_approved"
-    assert calls == ["draft"]
-    assert db.query(Publication).filter(Publication.action == "create_draft").count() == 1
+    assert article.revisions[-1].review.status == "pending"
+    assert calls == []
+    assert db.query(Publication).filter(Publication.action == "create_draft").count() == 0
 
 
 class InvalidQualityProvider:
@@ -261,5 +265,5 @@ def test_invalid_ai_quality_review_is_recorded_but_does_not_fail_local_delivery(
 
     assert result.status == "succeeded"
     assert article.status == "drafted"
-    assert article.revisions[-1].review.auto_result_json["status"] == "unavailable"
+    assert article.revisions[-1].review.auto_result_json["status"] == "fail"
     assert article.revisions[-1].review.status == "auto_approved"

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from typing import Any
 
@@ -175,6 +176,7 @@ def deliver_article(
     article: Article,
     revision: ArticleRevision,
     config: dict[str, Any],
+    ensure_active: Callable[[], None] | None = None,
 ) -> DeliveryResult:
     mode = str(config.get("delivery_mode") or "local_draft")
     if mode == "local_draft":
@@ -185,6 +187,8 @@ def deliver_article(
     account = db.get(ChannelAccount, account_id) if isinstance(account_id, str) else None
     if account is None or not account.enabled:
         raise ValueError("自动交付配置的公众号账号不存在或已停用")
+    if ensure_active is not None:
+        ensure_active()
     draft = _ensure_wechat_draft(db, article, revision, account, config)
     if mode == "wechat_draft":
         return DeliveryResult(
@@ -203,6 +207,8 @@ def deliver_article(
             remote_id=draft.remote_id,
             publish_blocked="global_auto_publish_disabled",
         )
+    if ensure_active is not None:
+        ensure_active()
     publication = _submit_publish(db, article, revision, account, draft)
     return DeliveryResult(
         mode=mode,

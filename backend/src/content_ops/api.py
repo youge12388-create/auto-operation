@@ -152,7 +152,7 @@ from .topic_algorithms import (
     topic_algorithm_values,
 )
 from .wechat import WeChatAPIError, WeChatClient
-from .workflow import create_job, run_job
+from .workflow import create_job
 
 app = FastAPI(title="AI 自动内容运营系统", version="0.1.0")
 
@@ -479,24 +479,16 @@ def article_read(article: Article) -> ArticleRead:
     )
 
 
-def _run_background(job_id: str) -> None:
-    from .db import SessionLocal
-
-    db = SessionLocal()
-    try:
-        job = db.get(Job, job_id)
-        model_id = (job.payload_json or {}).get("model_id") if job else None
-        model = db.get(ModelConfig, model_id) if model_id else None
-        run_job(db, job_id, provider_for(model))
-    except Exception:
-        db.rollback()
-    finally:
-        db.close()
+@app.get("/health/live")
+def health_live() -> dict[str, str]:
+    return {"status": "ok"}
 
 
 @app.get("/health")
-def health() -> dict[str, str]:
-    return {"status": "ok"}
+@app.get("/health/ready")
+def health(db: Session = Depends(get_db)) -> dict[str, str]:
+    db.execute(select(1))
+    return {"status": "ok", "database": "ok"}
 
 
 @app.post("/api/v1/auth/login", response_model=UserRead)
@@ -1249,7 +1241,6 @@ def start_topic_writing(
     )
     db.commit()
     notify_wake()
-    background.add_task(_run_background, job.id)
     return job
 
 
@@ -1370,7 +1361,6 @@ def scan_strategy_for_topics(
     except OperationalError as exc:
         raise_job_schema_error(exc)
     notify_wake()
-    background.add_task(_run_background, job.id)
     return job
 
 
@@ -1399,7 +1389,6 @@ def run_strategy(
     except OperationalError as exc:
         raise_job_schema_error(exc)
     notify_wake()
-    background.add_task(_run_background, job.id)
     return job
 
 
@@ -1831,7 +1820,7 @@ def create_topic(
 def decide_topic(
     topic_id: str,
     payload: TopicDecision,
-    user: User = Depends(require_roles("admin", "operator", "reviewer")),
+    user: User = Depends(require_roles("admin", "operator")),
     db: Session = Depends(get_db),
 ) -> TopicRead:
     topic = db.get(Topic, topic_id)
@@ -1931,7 +1920,6 @@ def add_job(
     except OperationalError as exc:
         raise_job_schema_error(exc)
     notify_wake()
-    background.add_task(_run_background, job.id)
     return job
 
 
@@ -1965,7 +1953,6 @@ def retry_job(
                 raise HTTPException(status_code=503, detail="数据库正忙，请稍后重试") from exc
             time.sleep(0.5 * (attempt + 1))
     notify_wake()
-    background.add_task(_run_background, job.id)
     return job
 
 
@@ -2007,7 +1994,7 @@ def get_article(article_id: str, _: User = Depends(get_current_user), db: Sessio
 @app.delete("/api/v1/articles/{article_id}", response_model=ArticleRead)
 def archive_article(
     article_id: str,
-    user: User = Depends(require_roles("admin", "operator", "reviewer")),
+    user: User = Depends(require_roles("admin", "operator")),
     db: Session = Depends(get_db),
 ) -> ArticleRead:
     article = db.get(Article, article_id)
@@ -2042,7 +2029,7 @@ def list_publications(
 def add_revision(
     article_id: str,
     payload: ArticleRevisionCreate,
-    user: User = Depends(require_roles("admin", "operator", "reviewer")),
+    user: User = Depends(require_roles("admin", "operator")),
     db: Session = Depends(get_db),
 ) -> ArticleRevision:
     article = db.get(Article, article_id)
@@ -2383,7 +2370,7 @@ def create_wechat_draft(
     article_id: str,
     revision_id: str,
     payload: WechatDraftCreate,
-    _: User = Depends(require_roles("admin", "operator", "reviewer")),
+    _: User = Depends(require_roles("admin", "operator")),
     db: Session = Depends(get_db),
 ) -> Publication:
     article = db.get(Article, article_id)
@@ -2820,7 +2807,7 @@ def publish_wechat_article(
     article_id: str,
     revision_id: str,
     payload: WechatPublishRequest,
-    user: User = Depends(require_roles("admin", "operator", "reviewer")),
+    user: User = Depends(require_roles("admin", "operator")),
     db: Session = Depends(get_db),
     background: BackgroundTasks = None,
 ) -> Publication:
@@ -2833,6 +2820,19 @@ def publish_wechat_article(
         raise HTTPException(status_code=404, detail="渠道账号不存在或已停用")
     if not (account.capabilities_json or {}).get("publish"):
         raise HTTPException(status_code=403, detail="该公众号账号没有发布权限，系统只允许创建草稿")
+    review = revision.review
+    automatic_result = review.auto_result_json if review is not None else {}
+    required_checks = {"fact_traceability", "source_quality", "title_alignment", "content_complete"}
+    automatic_passed = (
+        review is not None
+        and review.status == "auto_approved"
+        and automatic_result.get("status") == "pass"
+        and float(automatic_result.get("score") or 0) >= 75
+        and isinstance(automatic_result.get("checks"), dict)
+        and all(automatic_result["checks"].get(name) is True for name in required_checks)
+    )
+    if review is None or (review.status != "approved" and not automatic_passed):
+        raise HTTPException(status_code=409, detail="文章修订版本尚未通过发布审核")
     create_key = f"{revision.id}:{account.id}:create_draft"
     created = db.scalar(select(Publication).where(Publication.idempotency_key == create_key))
     if not created or created.status != "succeeded" or not created.remote_id:
@@ -2935,5 +2935,4 @@ def review_article(
     db.refresh(review)
     if should_resume and job is not None:
         notify_wake()
-        background.add_task(_run_background, job.id)
     return review_read(review)
