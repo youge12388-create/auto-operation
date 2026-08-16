@@ -25,7 +25,8 @@ services:
       DATABASE_URL: postgresql+psycopg://content_ops:${POSTGRES_PASSWORD:-content_ops}@postgres:5432/content_ops
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@example.com}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set}
-      COOKIE_SECURE: "false"
+      # Production must be served through an HTTPS reverse proxy.
+      COOKIE_SECURE: "${COOKIE_SECURE:-true}"
       STORAGE_DIR: /app/storage
       WECHAT_APP_ID: ${WECHAT_APP_ID:-}
       WECHAT_APP_SECRET: ${WECHAT_APP_SECRET:-}

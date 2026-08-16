@@ -81,7 +81,7 @@ def test_workflow_creates_draft_and_is_idempotent(db):
     assert topic.status == "writing"
     assert len(topic.scores) == 4
     evidence = db.query(EvidencePackage).filter(EvidencePackage.article_id == article.id).one()
-    assert evidence.status == "verified"
+    assert evidence.status == "unavailable"
     assert len(evidence.claims) == 1
     assert db.query(JobEvent).filter(JobEvent.job_id == job.id).count() >= len(job.steps) * 2
 

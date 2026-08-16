@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import signal
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -25,6 +26,23 @@ def _on_signal(signum, frame) -> None:  # type: ignore[no-untyped-def]
     _shutdown_requested = True
 
 
+def _renew_lease(job_id: str, stop: threading.Event) -> None:
+    """Keep a lease alive while a long provider or fetch call is in progress."""
+    interval = max(1.0, get_settings().job_lease_seconds / 3)
+    while not stop.wait(interval):
+        db = SessionLocal()
+        try:
+            job = db.get(Job, job_id)
+            if job is None or job.status != "running":
+                return
+            job.lease_until = datetime.now(timezone.utc) + timedelta(seconds=get_settings().job_lease_seconds)
+            db.commit()
+        except Exception:
+            db.rollback()
+        finally:
+            db.close()
+
+
 signal.signal(signal.SIGTERM, _on_signal)
 signal.signal(signal.SIGINT, _on_signal)
 
@@ -39,7 +57,7 @@ def claim_and_run_once() -> bool:
             .where(
                 or_(
                     Job.status == "queued",
-                    (Job.status == "running") & (Job.lease_until < now),
+                    (Job.status == "running") & ((Job.lease_until.is_(None)) | (Job.lease_until < now)),
                     (Job.status == "failed_retryable") & (Job.available_at <= now),
                 )
             )
@@ -55,9 +73,14 @@ def claim_and_run_once() -> bool:
         model_id = (job.payload_json or {}).get("model_id")
         model = db.get(ModelConfig, model_id) if model_id else None
         _RUNNING = True
+        lease_stop = threading.Event()
+        heartbeat = threading.Thread(target=_renew_lease, args=(job.id, lease_stop), daemon=True)
+        heartbeat.start()
         try:
             run_job(db, job.id, provider_for(model))
         finally:
+            lease_stop.set()
+            heartbeat.join(timeout=1)
             _RUNNING = False
         return True
     except Exception:

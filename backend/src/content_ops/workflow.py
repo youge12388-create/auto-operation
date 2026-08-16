@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .delivery import deliver_article
+from .fact_verification import verify_evidence
 from .ingestion import collect_source
 from .material_curation import curate_materials
 from .models import (
@@ -33,6 +34,7 @@ from .models import (
     Topic,
 )
 from .providers import CompletionRequest, ModelProvider, provider_for
+from .settings import get_settings
 from .strategy_combinations import resolve_strategy_definition
 from .strategy_config import (
     StrategyConfigError,
@@ -44,6 +46,21 @@ from .strategy_config import (
 )
 from .themes import extract_html, layout_instruction, render_revision, validate_gzh_html
 from .topic_recommendations import recommend_topics
+
+REQUIRED_AI_REVIEW_CHECKS = frozenset(
+    {"fact_traceability", "source_quality", "title_alignment", "content_complete"}
+)
+
+
+class JobCanceled(Exception):
+    pass
+
+
+def _assert_job_active(db: Session, job: Job) -> None:
+    db.refresh(job, attribute_names=["status"])
+    if job.status == "canceled":
+        raise JobCanceled("Job was canceled")
+
 
 FIXED_STEPS = (
     "collect",
@@ -134,6 +151,7 @@ def _job_event(
 
 
 def _run_step(db: Session, job: Job, name: str, fn) -> dict[str, Any]:
+    _assert_job_active(db, job)
     step = _step(db, job, name)
     if step.status == "succeeded":
         return step.output_json
@@ -141,10 +159,13 @@ def _run_step(db: Session, job: Job, name: str, fn) -> dict[str, Any]:
     step.attempt_count += 1
     step.started_at = datetime.now(timezone.utc)
     job.current_step = name
+    if job.lease_until is not None:
+        job.lease_until = datetime.now(timezone.utc) + timedelta(seconds=get_settings().job_lease_seconds)
     _job_event(db, job, "step_started", name, "running")
     db.commit()
     try:
         output = fn()
+        _assert_job_active(db, job)
         step.status = "succeeded"
         step.output_json = output
         step.completed_at = datetime.now(timezone.utc)
@@ -152,6 +173,19 @@ def _run_step(db: Session, job: Job, name: str, fn) -> dict[str, Any]:
         _job_event(db, job, "step_succeeded", name, "succeeded", {"output_keys": list(output)})
         db.commit()
         return output
+    except JobCanceled:
+        canceled_at = datetime.now(timezone.utc)
+        step.status = "canceled"
+        step.completed_at = canceled_at
+        step.error = "Job was canceled"
+        job.status = "canceled"
+        job.available_at = None
+        job.lease_until = None
+        job.completed_at = canceled_at
+        _record_job_duration(job, canceled_at)
+        _job_event(db, job, "job_canceled", name, "canceled")
+        db.commit()
+        raise
     except Exception as exc:
         failed_at = datetime.now(timezone.utc)
         step.status = "failed"
@@ -169,7 +203,6 @@ def _run_step(db: Session, job: Job, name: str, fn) -> dict[str, Any]:
             job.available_at = None
         db.commit()
         raise
-
 
 def _skip_step(db: Session, job: Job, name: str, reason: str) -> dict[str, Any]:
     step = _step(db, job, name)
@@ -358,15 +391,25 @@ def _parse_quality_review(content: str) -> dict[str, Any]:
 
 def _parse_advisory_quality_review(content: str) -> dict[str, Any]:
     try:
-        result = _parse_quality_review(content)
+        return _parse_quality_review(content)
     except (TypeError, ValueError):
         return {
             "status": "unavailable",
             "score": 0.0,
-            "summary": "AI advisory review was unavailable; delivery continued.",
+            "summary": "AI review was unavailable; automatic publication requires human review.",
             "checks": {},
         }
-    return {**result, "blocking": False}
+
+
+def _automatic_review_passed(result: dict[str, Any], review_rules: dict[str, Any]) -> bool:
+    threshold = float(review_rules.get("ai_review_min_score", 75))
+    checks = result.get("checks")
+    return (
+        result.get("status") == "pass"
+        and float(result.get("score") or 0) >= threshold
+        and isinstance(checks, dict)
+        and all(checks.get(name) is True for name in REQUIRED_AI_REVIEW_CHECKS)
+    )
 
 
 def _require_article_body(content: str, stage: str) -> str:
@@ -473,7 +516,6 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
         job.completed_at = None
         job.status = "running"
         job.available_at = None
-        job.lease_until = None
         db.commit()
 
         collected: list[str] = []
@@ -803,6 +845,14 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
     evidence_items = [evidence_by_id[item_id] for item_id in material_ids if item_id in evidence_by_id]
 
     def evidence() -> dict[str, Any]:
+        verification = verify_evidence(
+            stage_provider("review"),
+            article.title,
+            [
+                {"title": source_item.title, "url": source_item.url, "text": source_item.content[:4000]}
+                for source_item in evidence_items
+            ],
+        )
         result = {
             "confirmed_facts": [
                 {"statement": source_item.content[:1000] or source_item.title, "source_url": source_item.url}
@@ -812,12 +862,18 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
             "unknowns": [],
             "inferences": [],
             "sources": [
-                {"title": source_item.title, "url": source_item.url, "verified": True} for source_item in evidence_items
+                {
+                    "title": source_item.title,
+                    "url": source_item.url,
+                    "verified": verification["verification_status"] == "verified",
+                }
+                for source_item in evidence_items
             ],
+            "verification": verification,
         }
         package = db.scalar(select(EvidencePackage).where(EvidencePackage.article_id == article.id))
         if package is None:
-            package = EvidencePackage(article_id=article.id, status="verified", version=1, summary=item.title)
+            package = EvidencePackage(article_id=article.id, status="draft", version=1, summary=item.title)
             db.add(package)
             db.flush()
             for source_item in evidence_items:
@@ -838,9 +894,21 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
                         source_id=source.id,
                         claim_type="fact",
                         statement=source_item.content[:1000] or source_item.title,
-                        status="confirmed",
+                        status="source_snapshot",
                     )
                 )
+        package.status = str(verification["verification_status"])
+        package.summary = str(verification["summary"])
+        for claim in verification["claims"]:
+            db.add(
+                EvidenceClaim(
+                    evidence_package_id=package.id,
+                    source_id=None,
+                    claim_type="fact",
+                    statement=claim["statement"],
+                    status=claim["status"],
+                )
+            )
         article.evidence_json = {**result, "evidence_package_id": package.id}
         db.flush()
         return {**result, "evidence_package_id": package.id}
@@ -972,7 +1040,24 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
             )
         ),
     )
+    verification = evidence_output.get("verification", {})
+    if verification.get("verification_status") != "verified":
+        quality_review_output = {
+            "status": "fail",
+            "score": 0.0,
+            "summary": str(verification.get("summary") or "Fact verification requires human review."),
+            "checks": {
+                "fact_traceability": False,
+                "source_quality": False,
+                "title_alignment": True,
+                "content_complete": True,
+            },
+        }
     human_review_required = bool(review_rules.get("human_review_required", False))
+    automatic_review_passed = _automatic_review_passed(quality_review_output, review_rules)
+    requires_human_review = human_review_required or (
+        strategy_config.get("delivery_mode") == "auto_publish" and not automatic_review_passed
+    )
 
     approved_revision_id = (job.payload_json or {}).get("approved_revision_id")
     approved_revision = db.get(ArticleRevision, approved_revision_id) if approved_revision_id else None
@@ -1066,11 +1151,11 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
         db.flush()
     else:
         current_review = rendered_revision.review
-    if not human_review_required:
+    if not requires_human_review:
         if current_review is not None:
             current_review.status = "auto_approved"
         article.status = "approved"
-    if human_review_required and article.status != "approved":
+    if requires_human_review and article.status != "approved":
         article.status = "waiting_review"
         job.status = "waiting_review"
         job.current_step = "review"
@@ -1082,7 +1167,14 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
         return job
 
     def draft() -> dict[str, Any]:
-        delivery = deliver_article(db, article, rendered_revision, strategy_config)
+        _assert_job_active(db, job)
+        delivery = deliver_article(
+            db,
+            article,
+            rendered_revision,
+            strategy_config,
+            ensure_active=lambda: _assert_job_active(db, job),
+        )
         job.status = "succeeded"
         job.current_step = "draft"
         job.available_at = None
