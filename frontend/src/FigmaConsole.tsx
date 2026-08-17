@@ -151,6 +151,849 @@ function Dashboard({ materials, topics, articles, jobs, sourcesCount, onNavigate
 }
 
 function MaterialCard({ material, selected, onSelect }: { material: Material; selected: boolean; onSelect: () => void }) {
-  return <button type="button" className={`material-card ${selected ? "is-selected" : ""}`} onClick={oÛ¾}öÚ$z{-®éÜj×W2†'F–6ÆRç7FGW2’bb†4f–æÄ'F–6ÆT&öG’†'F–6ÆR’ÀĞ¢“°Ğ¢&WGW&âÆ–'&'’æf–æB‚†'F–6ÆR’Óâ'F–6ÆRæ–BÓÓÒ6VÆV7FVD'F–6ÆT–B’óòÆ–'&'•³Ó°Ğ¢ÒÂ¶'F–6ÆW2æFFÂ6VÆV7FVD'F–6ÆT–EÒ“°Ğ¢6öç7BÆ–'&'•&Wf–Wu&Wf—6–öâÒÆ–'&'•&Wf–Wt'F–6ÆSòç&Wf—6–öç3òå²†Æ–'&'•&Wf–Wt'F–6ÆRç&Wf—6–öç3òæÆVæwF‚óò’ÒÓ°Ğ¢6öç7BÆ–'&'•F†VÖT–BÒW6TÖVÖò‚‚’Óâ°Ğ¢6öç7B6æ6†÷BÒÆ–'&'•&Wf–Wt'F–6ÆSòç'VçF–ÖU÷6æ6†÷BÇÂ·Ó°Ğ¢6öç7BF†VÖRÒ6æ6†÷BçF†VÖR2²–Có¢Væ¶æ÷vâÒÂVæFVf–æVC°Ğ¢6öç7BW†V7WF–öâÒ6æ6†÷BæW†V7WF–öåö6öæf–r2²F†VÖUö–Có¢Væ¶æ÷vâÒÂVæFVf–æVC°Ğ¢&WGW&âG—VöbF†VÖSòæ–BÓÓÒ'7G&–ær Ğ¢òF†VÖRæ–@Ğ¢¢G—VöbW†V7WF–öãòçF†VÖUö–BÓÓÒ'7G&–ær Ğ¢òW†V7WF–öâçF†VÖUö–@Ğ¢¢"#°Ğ¢ÒÂ¶Æ–'&'•&Wf–Wt'F–6ÆUÒ“°Ğ¢W6TVffV7B‚‚’Óâ°Ğ¢–b‡vRÓÓÒ&Æ–'&'’"bbÆ–'&'•F†VÖT–BbbÆ–'&'•F†VÖT–BÓÒ6VÆV7FVEF†VÖT–B’°Ğ¢6WE6VÆV7FVEF†VÖT–B†Æ–'&'•F†VÖT–B“°Ğ¢ĞĞ¢ÒÂ¶Æ–'&'•F†VÖT–BÂvUÒ“°Ğ¢6öç7BF†VÖU&Wf–WrÒW6UVW'’‡°Ğ¢VW'”¶W“¢²'F†VÖR×&Wf–Wr"ÂÆ–'&'•&Wf–Wt'F–6ÆSòæ–BÂÆ–'&'•&Wf–Wu&Wf—6–öãòæ–BÂ6VÆV7FVEF†VÖT–EÒÀĞ¢VW'”fã¢‚’Óâ’ç&Wf–WuF†VÖR†Æ–'&'•&Wf–Wt'F–6ÆRæ–BÂÆ–'&'•&Wf–Wu&Wf—6–öâæ–BÂ6VÆV7FVEF†VÖT–B’ÀĞ¢Væ&ÆVC¢vRÓÓÒ&Æ–'&'’"bb&ööÆVâ†Æ–'&'•&Wf–Wt'F–6ÆRbbÆ–'&'•&Wf–Wu&Wf—6–öâbb6VÆV7FVEF†VÖT–B’ÀĞ¢Ò“°Ğ¢6öç7B6öçFVçBÒW6TÖVÖò‚‚’Óâ°Ğ¢–b‡vRÓÓÒ&F6†&ö&B"’&WGW&âÄF6†&ö&BÖFW&–Ç3×¶ÖFW&–Ç2æFFÇÂµ×ÒF÷–73×·F÷–72æFFÇÂµ×Ò'F–6ÆW3×¶'F–6ÆW2æFFÇÂµ×Ò¦ö'3×¶¦ö'2æFFÇÂµ×Ò6÷W&6W46÷VçC×¶F6†&ö&BæFFòç6÷W&6W2ÇÂÒöäæf–vFS×·6WEvWÒöä÷Vå&Wf–Ws×²†–B’Óâ²6WE6VÆV7FVD'F–6ÆT–B†–B“²6WEvR‚'&Wf–Wr"“²×Òóã°Ğ¢–b‡vRÓÓÒ&ÖFW&–Ç2"’&WGW&âÄÖFW&–Åv÷&·76RÖFW&–Ç3×¶ÖFW&–Ç2æFFÇÂµ×Ò6FVv÷&–W3×¶ÖFW&–Ä6FVv÷&–W2æFFÇÂµ×ÒÆöDW'&÷#×µ¶ÖFW&–Ç2æW'&÷"ÂÖFW&–Ä6FVv÷&–W2æW'&÷%Òæf–ÇFW"‚†W'&÷"“¢W'&÷"—2W'&÷"ÓâW'&÷"–ç7Fæ6VöbW'&÷"’æÖ‚†W'&÷"’ÓâW'&÷"æÖW76vR’æ¦ö–â‚.ûÉ²"—Ò6÷W&6W3×·6÷W&6W2æFFÇÂµ×Ò6¶–ÆÇ3×·6¶–ÆÇ2æFFÇÂµ×Ò7G&FVv–W3×·7G&FVv–W2æFFÇÂµ×Ò7W&F–öå&W7VÇC×¶7W&F–öå&W7VÇGÒ7&VF–æs×¶7&VFTg&öÔÖFW&–Ç2æ—5VæF–æwÒöä7&VFS×²‡–ÆöB’Óâ7&VFTg&öÔÖFW&–Ç2æ×WFFR‡–ÆöB—ÒöäÖævU6÷W&6W3×²‚’Óâ²6WE6WGF–æw5F"‚'6÷W&6W2"“²6WEvR‚'6WGF–æw2"“²×ÒöäÖævU7G&FVv–W3×²‚’Óâ²6WE6WGF–æw5F"‚'7G&FVw’"“²6WEvR‚'6WGF–æw2"“²×Òöä6öÆÆV7C×²†–G2’Óâ6öÆÆV7E6÷W&6W2æ×WFFR†–G2—Ò6öÆÆV7F–æs×¶6öÆÆV7E6÷W&6W2æ—5VæF–æwÒöä7W&FS×²‡7G&FVw”–B’Óâ7W&FTÖFW&–Ç2æ×WFFR‡7G&FVw”–B—Ò7W&F–æs×¶7W&FTÖFW&–Ç2æ—5VæF–æwÒöä6Æ76–g“×²†–G2’Óâ6Æ76–g”ÖFW&–Ç2æ×WFFR†–G2—Ò6Æ76–g––æs×¶6Æ76–g”ÖFW&–Ç2æ—5VæF–æwÒöåG&–vS×²†–BÂFV6—6–öâ’ÓâG&–vRæ×WFFR‡²–BÂFV6—6–öâÒ—Òöä76–vä6FVv÷'“×²†–BÂ6FVv÷'”–B’Óâ76–väÖFW&–Ä6FVv÷'’æ×WFFR‡²–BÂ6FVv÷'”–BÒ—ÒöäFD6FVv÷'“×²‡–ÆöB’ÓâFDÖFW&–Ä6FVv÷'’æ×WFFT7–æ2‡–ÆöB—ÒöåWFFT6FVv÷'“×²†–BÂ–ÆöB’ÓâWFFTÖFW&–Ä6FVv÷'’æ×WFFT7–æ2‡²–BÂ–ÆöBÒ—ÒöäF—6&ÆT6FVv÷'“×²†–B’ÓâF—6&ÆTÖFW&–Ä6FVv÷'’æ×WFFT7–æ2†–B—Òöå&W7F÷&T6FVv÷'“×²†–B’Óâ&W7F÷&TÖFW&–Ä6FVv÷'’æ×WFFT7–æ2†–B—Òóã°Ğ¢–b‡vRÓÓÒ'F÷–72"’&WGW&âÅF÷–5&F"F÷–73×·F÷–72æFFÇÂµ×Ò7G&FVv–W3×·7G&FVv–W2æFFÇÂµ×ÒÆv÷&—F†×3×·F÷–4Æv÷&—F†×2æFFÇÂµ×Ò66ææ–æs×·66åF÷–72æ—5VæF–æwÒw&—F–æs×¶66WEF÷–2æ—5VæF–æwÒÖæv–ætÆv÷&—F†×3×¶7&VFUF÷–4Æv÷&—F†Òæ—5VæF–ærÇÂWFFUF÷–4Æv÷&—F†Òæ—5VæF–ærÇÂFVÆWFUF÷–4Æv÷&—F†Òæ—5VæF–æwÒöå66ã×²‡7G&FVw”–BÂÆv÷&—F†Ô–B’Óâ66åF÷–72æ×WFFR‡²7G&FVw”–BÂÆv÷&—F†Ô–BÒ—Òöåw&—FS×²‡F÷–2’Óâ66WEF÷–2æ×WFFR‡F÷–2—ÒöäF—6Ö—73×²‡F÷–2’Óâ²fö–B’æFV6–FUF÷–2‡F÷–2æ–BÂ'&V¦V7B"’çF†Vâ‚‚’Óâ&Vg&W6‚‚'F÷–72"Â&ÖFW&–Ç2"’’æ6F6‚‚†W'&÷#¢W'&÷"’ÓâÖW76vRæW'&÷"†W'&÷"æÖW76vR’“²×Òöå6fTÖFW&–Ç3×²‡F÷–2’Óâ6fUF÷–4ÖFW&–Ç2æ×WFFR‡F÷–2—Òöä7&VFTÆv÷&—F†Ó×²‡–ÆöB’Óâ7&VFUF÷–4Æv÷&—F†Òæ×WFFT7–æ2‡–ÆöB—ÒöåWFFTÆv÷&—F†Ó×²†–BÂ–ÆöB’ÓâWFFUF÷–4Æv÷&—F†Òæ×WFFT7–æ2‡²–BÂ–ÆöBÒ—ÒöäFVÆWFTÆv÷&—F†Ó×²†–B’ÓâFVÆWFUF÷–4Æv÷&—F†Òæ×WFFT7–æ2†–B—Òóã°Ğ¢–b‡vRÓÓÒ'&Wf–Wr"’&WGW&âÅ&Wf–WuVWVR'F–6ÆW3×¶'F–6ÆW2æFFÇÂµ×Ò¦ö'3×¶¦ö'2æFFÇÂµ×Ò6VÆV7FVD–C×·6VÆV7FVD'F–6ÆT–GÒVæF–æs×·&Wf–Wt'F–6ÆRæ—5VæF–æwÒ&WG'––æs×·&WG'”¦ö"æ—5VæF–æwÒöå6VÆV7C×·6WE6VÆV7FVD'F–6ÆT–GÒöä&÷fS×²†'F–6ÆR’Óâ&Wf–Wt'F–6ÆRæ×WFFR‡²'F–6ÆRÂFV6—6–öã¢&&÷fR"Ò—Òöä6†ævW3×²†'F–6ÆR’Óâ&Wf–Wt'F–6ÆRæ×WFFR‡²'F–6ÆRÂFV6—6–öã¢'&WVW7Eö6†ævW2"Ò—ÒöäVF—C×²†–B’Óâ²6WE6VÆV7FVD'F–6ÆT–B†–B“²6WDVF—F÷%&WGW&åvR‚'&Wf–Wr"“²6WEvR‚&VF—F÷""“²×Òöå&WG'“×²†–B’Óâ&WG'”¦ö"æ×WFFR†–B—Òóã°Ğ¢–b‡vRÓÓÒ&Æ–'&'’"’&WGW&âÄ'F–6ÆTÆ–'&'’'F–6ÆW3×¶'F–6ÆW2æFFÇÂµ×Ò6VÆV7FVD–C×·6VÆV7FVD'F–6ÆT–GÒF†VÖW3×·F†VÖW2æFFÇÂµ×Ò6†ææVÇ3×¶6†ææVÇ2æFFÇÂµ×Ò6VÆV7FVEF†VÖT–C×·6VÆV7FVEF†VÖT–GÒ6VÆV7FVD6†ææVÄ–C×·6VÆV7FVD6†ææVÄ–GÒF‡VÖ$ÖVF––C×·F‡VÖ$ÖVF––GÒ6÷fW%&Wf–WuW&Ã×¶6÷fW%&Wf–WuW&ÇÒF†VÖU&Wf–Wt‡FÖÃ×·F†VÖU&Wf–WræFFòæ‡FÖÂÇÂ"'ÒF†VÖU&Wf–WtÆöF–æs×·F†VÖU&Wf–Wræ—4ÆöF–æwÒF†VÖU&Wf–WtW'&÷#×·F†VÖU&Wf–WræW'&÷"–ç7Fæ6VöbW'&÷"òF†VÖU&Wf–WræW'&÷"æÖW76vR¢"'ÒVæF–æs×¶7&VFTG&gBæ—5VæF–ærÇÂWÆöEF‡VÖ"æ—5VæF–ærÇÂ&6†—fT'F–6ÆRæ—5VæF–æwÒFVÆ—fW'”W'&÷#×¶FVÆ—fW'”W'&÷'Òöå6VÆV7C×²†–B’Óâ²6WE6VÆV7FVD'F–6ÆT–B†–B“²6WDFVÆ—fW'”W'&÷"‚""“²×ÒöäVF—C×²†–B’Óâ²6WE6VÆV7FVD'F–6ÆT–B†–B“²6WDVF—F÷%&WGW&åvR‚&Æ–'&'’"“²6WEvR‚&VF—F÷""“²×Òöä&6†—fS×²†'F–6ÆR’Óâ&6†—fT'F–6ÆRæ×WFFR†'F–6ÆRæ–B—ÒöåF†VÖT6†ævS×·6WE6VÆV7FVEF†VÖT–GÒöä6†ææVÄ6†ævS×²†–B’Óâ²6WE6VÆV7FVD6†ææVÄ–B†–B“²6WEF‡VÖ$ÖVF––B‚""“²6WDFVÆ—fW'”W'&÷"‚""“²×ÒöåWÆöC×²†f–ÆR’ÓâWÆöEF‡VÖ"æ×WFFR†f–ÆR—ÒöäG&gC×²†'F–6ÆR’Óâ7&VFTG&gBæ×WFFR†'F–6ÆR—Òóã°Ğ¢–b‡vRÓÓÒ&VF—F÷""’&WGW&âÄ'F–6ÆTVF—F÷"'F–6ÆS×·6VÆV7FVD'F–6ÆWÒöä&6³×²‚’Óâ6WEvR†VF—F÷%&WGW&åvR—Òöå6fS×²†'F–6ÆT–BÂF—FÆRÂÖ&¶F÷vâ’Óâ6fU&Wf—6–öâæ×WFFR‡²'F–6ÆT–BÂF—FÆRÂÖ&¶F÷vâÒ—Ò6f–æs×·6fU&Wf—6–öâæ—5VæF–æwÒóã°Ğ¢–b‡vRÓÓÒ'6WGF–æw2"’&WGW&â€Ğ¢ÆF—càĞ¢ÆF—b6Æ74æÖSÒ&f–vÖ×vR"7G–ÆS×·²FF–æt&÷GFöÓ¢×ÓàĞ¢ÆF—b6Æ74æÖSÒ&f–vÖ×F'2#àĞ¢Æ'WGFöâ6Æ74æÖS×·6WGF–æw5F"ÓÓÒ'7G&FVw’"ò&—2Ö7F—fR"¢"'ÒG—SÒ&'WGFöâ"öä6Æ–6³×²‚’Óâ6WE6WGF–æw5F"‚'7G&FVw’"—Óîˆz®XªXÉnyIşKª~{«óÂö'WGFöãàĞ¢Æ'WGFöâ6Æ74æÖS×·6WGF–æw5F"ÓÓÒ'6÷W&6W2"ò&—2Ö7F—fR"¢"'ÒG—SÒ&'WGFöâ"öä6Æ–6³×²‚’Óâ6WE6WGF–æw5F"‚'6÷W&6W2"—ÓîKúhşk©Æ#ç·6÷W&6W2æFFòæÆVæwF‚ÇÂÓÂö#ãÂö'WGFöãàĞ¢Æ'WGFöâ6Æ74æÖS×·6WGF–æw5F"ÓÓÒ&ÖöFVÇ2"ò&—2Ö7F—fR"¢"'ÒG—SÒ&'WGFöâ"öä6Æ–6³×²‚’Óâ6WE6WGF–æw5F"‚&ÖöFVÇ2"—ÓîjŠYè¾KŠŞ[ø2Æ#ç¶ÖöFVÇ2æFFòæÆVæwF‚ÇÂÓÂö#ãÂö'WGFöãàĞ¢Æ'WGFöâ6Æ74æÖS×·6WGF–æw5F"ÓÓÒ&6†ææVÇ2"ò&—2Ö7F—fR"¢"'ÒG—SÒ&'WGFöâ"öä6Æ–6³×²‚’Óâ6WE6WGF–æw5F"‚&6†ææVÇ2"—ÓîXZÎKÉ~Xû~‹JnXûrÆ#ç¶6†ææVÇ2æFFòæÆVæwF‚ÇÂÓÂö#ãÂö'WGFöãàĞ¢¶7W'&VçEW6W"ç&öÆRÓÓÒ&FÖ–â"bbÆ'WGFöâ6Æ74æÖS×·6WGF–æw5F"ÓÓÒ'W6W'2"ò&—2Ö7F—fR"¢"'ÒG—SÒ&'WGFöâ"öä6Æ–6³×²‚’Óâ6WE6WGF–æw5F"‚'W6W'2"—ÓîyJh‹~KŠŞ[ø2Æ#ç·W6W'2æFFòæÆVæwF‚ÇÂÓÂö#ãÂö'WGFöãçĞĞ¢ÂöF—càĞ¢ÂöF—càĞ¢·6WGF–æw5F"ÓÓÒ'7G&FVw’"ò€Ğ¢Å7G&FVw•—VÆ–æUvR7G&FVv–W3×·7G&FVv–W2æFFÇÂµ×Ò6VÆV7FVD–C×¶7&VF–æu7G&FVw’òçVÆÂ¢6VÆV7FVE7G&FVw”–GÒöå6VÆV7C×²†–B’Óâ²6WD7&VF–æu7G&FVw’†fÇ6R“²6WE6VÆV7FVE7G&FVw”–B†–B“²×ÒöäæWs×²‚’Óâ²6WD7&VF–æu7G&FVw’‡G'VR“²6WE6VÆV7FVE7G&FVw”–B†çVÆÂ“²×Ò6FVv÷&–W3×¶ÖFW&–Ä6FVv÷&–W2æFFÇÂµ×Ò6¶–ÆÇ3×·6¶–ÆÇ2æFFÇÂµ×ÒF†VÖW3×·F†VÖW2æFFÇÂµ×ÒÖöFVÇ3×¶ÖöFVÇ2æFFÇÂµ×Ò6†ææVÇ3×¶6†ææVÇ2æFFÇÂµ×Òöå6fS×²†–BÂ–ÆöB’Óâ6fU7G&FVw’æ×WFFT7–æ2‡²–BÂ–ÆöBÒ—Òöå'Vã×²†–BÂ6öÖ&–æF–öä–B’Óâ'Vå7G&FVw’æ×WFFT7–æ2‡²–BÂ6öÖ&–æF–öä–BÒ—ÒöäÖævTÖFW&–Ç3×²‚’Óâ6WEvR‚&ÖFW&–Ç2"—ÒöåWÆöEF‡VÖ#×¶7–æ2†f–ÆRÂ6†ææVÄ–B’Óâ†v—B’çWÆöEvV6†EF‡VÖ"†f–ÆRÂ6†ææVÄ–B’’æÖVF–ö–GÒöä–×÷'E6¶–ÆÃ×¶7–æ2†f–ÆR’Óâ²v—B–×÷'E6¶–ÆÂæ×WFFT7–æ2†f–ÆR“²×Ò–×÷'F–æu6¶–ÆÃ×¶–×÷'E6¶–ÆÂæ—5VæF–æwÒóàĞ¢’¢6WGF–æw5F"ÓÓÒ'6÷W&6W2"ò€Ğ¢Å6÷W&6T6VçFW"6÷W&6W3×·6÷W&6W2æFFÇÂµ×ÒöäFC×²‚’Óâ6WE6÷W&6T÷Vâ‡G'VR—ÒöäFE&V6öÖÖVæFVC×¶7–æ2‡6÷W&6R’Óâ²v—BFE&V6öÖÖVæFVE6÷W&6Ræ×WFFT7–æ2‡6÷W&6R“²×Òöä6öÆÆV7C×¶7–æ2†–B’Óâ²v—B6öÆÆV7E6÷W&6Ræ×WFFT7–æ2†–B“²×ÒöåWFFS×¶7–æ2†–BÂ6÷W&6R’Óâ²v—BWFFU6÷W&6Ræ×WFFT7–æ2‡²–BÂ6÷W&6RÒ“²×ÒöäF—6&ÆS×¶7–æ2†–B’Óâ²v—BF—6&ÆU6÷W&6Ræ×WFFT7–æ2†–B“²×ÒóàĞ¢’¢6WGF–æw5F"ÓÓÒ&ÖöFVÇ2"ò‚ÄÖöFVÄ6VçFW"ÖöFVÇ3×¶ÖöFVÇ2æFFÇÂµ×ÒöäFC×¶7–æ2‡’Óâ²v—BFDÖöFVÂæ×WFFT7–æ2‡“²×ÒöåWFFS×¶7–æ2†–BÂ’Óâ²v—BWFFTÖöFVÂæ×WFFT7–æ2‡²–BÂÒ“²×ÒöåFW7C×²†–B’ÓâFW7DÖöFVÂæ×WFFR†–B—ÒöäFVÆWFS×¶7–æ2†–B’Óâ²v—BFVÆWFTÖöFVÂæ×WFFT7–æ2†–B“²×ÒóàĞ¢’¢6WGF–æw5F"ÓÓÒ&6†ææVÇ2"ò€Ğ¢Ä6†ææVÄ6VçFW"66÷VçG3×¶6†ææVÇ2æFFÇÂµ×ÒöäFC×¶7–æ2‡–ÆöB’Óâ²v—BFD6†ææVÂæ×WFFT7–æ2‡–ÆöB“²×ÒöåWFFS×¶7–æ2†–BÂ²æÖRÂö–BÂ÷6V7&WBÂVæ&ÆVBÒ’Óâ²v—BWFFT6†ææVÂæ×WFFT7–æ2‡²–BÂ–ÆöC¢²æÖRÂö–BÂ÷6V7&WBÂVæ&ÆVBÒÒ“²×ÒöåFW7C×²†–B’ÓâFW7D6†ææVÂæ×WFFR†–B—ÒöäF—6&ÆS×¶7–æ2†–B’Óâ²v—BF—6&ÆT6†ææVÂæ×WFFT7–æ2†–B“²×ÒóàĞ¢’¢€Ğ¢ÅW6W$6VçFW"W6W'3×·W6W'2æFFÇÂµ×ÒöäFC×¶7–æ2‡–ÆöB’Óâ²v—BFEW6W"æ×WFFT7–æ2‡–ÆöB“²×ÒóàĞ¢—ĞĞ¢ÂöF—càĞ¢“°Ğ¢ÒÂ¶66WEF÷–2Â&6†—fT'F–6ÆRÂ'F–6ÆW2æFFÂ6†ææVÇ2æFFÂ6÷fW%&Wf–WuW&ÂÂ7&VFTG&gBÂ7&VFTg&öÔÖFW&–Ç2ÂF6†&ö&BæFFÂFVÆ—fW'”W'&÷"ÂVF—F÷%&WGW&åvRÂ¦ö'2æFFÂÖFW&–Ä6FVv÷&–W2æFFÂÖFW&–Ä6FVv÷&–W2æW'&÷"ÂÖFW&–Ç2æFFÂÖFW&–Ç2æW'&÷"ÂÖöFVÇ2æFFÂvRÂV&Æ—6„G&gBÂ&Wf–Wt'F–6ÆRÂ6fUF÷–4ÖFW&–Ç2Â66åF÷–72Â6VÆV7FVD'F–6ÆT–BÂ6VÆV7FVD6†ææVÄ–BÂ6VÆV7FVDÖFW&–Ä–BÂ6VÆV7FVE6¶–ÆÄ–BÂ6VÆV7FVE7G&FVw”–BÂ6VÆV7FVEF†VÖT–BÂ6WGF–æw5F"Â6¶–ÆÇ2æFFÂ6÷W&6W2æFFÂ6÷W&6UG—RÂ7G&FVv–W2æFFÂF†VÖW2æFFÂF†VÖU&Wf–WræFFòæ‡FÖÂÂF‡VÖ$ÖVF––BÂF÷–4Æv÷&—F†×2æFFÂF÷–72æFFÂG&–vRÂWFFUF÷–4Æv÷&—F†ÒÂW6W'2æFFÂWFFU6÷W&6RÂWÆöEF‡VÖ"Â6öÆÆV7E6÷W&6W2Â7W&FTÖFW&–Ç2Â6Æ76–g”ÖFW&–Ç2Â76–väÖFW&–Ä6FVv÷'’ÂFDÖFW&–Ä6FVv÷'’ÂWFFTÖFW&–Ä6FVv÷'’ÂF—6&ÆTÖFW&–Ä6FVv÷'’Â&W7F÷&TÖFW&–Ä6FVv÷'’Â&WG'”¦ö%Ò“°Ğ¢&WGW&âÆF—b6Æ74æÖSÒ&f–vÖÖ6öç6öÆR#ãÄf–vÖ6–FV&"vS×·vWÒöäæf–vFS×·6WEvWÒöä7&VFS×²‚’Óâ²6WEvR‚'F÷–72"“²6WEF÷–4÷Vâ‡G'VR“²×Òöä†VÇ×²‚’ÓâÖW76vRæ–æfò‚.[ŠîXªKŠŞ[ø>ûÉ®XXzÙ¾˜{JiÙûÈÎXhŞzîŠêN˜š)8˜XŞ{ÚîzÙnyZ^[›nZêjXù[ˆ>8""—ÒöäÆöv÷WC×²‚’Óâ²fö–B’æÆöv÷WB‚’çF†Vâ‚‚’Óâv–æF÷ræÆö6F–öâç&VÆöB‚’’æ6F6‚‚†W'&÷#¢W'&÷"’ÓâÖW76vRæW'&÷"†W'&÷"æÖW76vR’“²×ÒóãÆF—b6Æ74æÖSÒ&f–vÖÖÖ–â#ãÄf–vÖF÷&"vS×·vWÒW6W#×¶7W'&VçEW6W'Òæ÷F–f–6F–öä6÷VçC×²†¦ö'2æFFÇÂµÒ’æf–ÇFW"‚†—FVÒ’Óâ—FVÒç7FGW2ç7F'G5v—F‚‚&f–ÆVB"’ÇÂ—FVÒç7FGW2ÓÓÒ'v—F–æu÷&Wf–Wr"’æÆVæwF‡Òöå6V&6ƒ×·6V&6‡ÒöäÆöv÷WC×²‚’Óâ²fö–B’æÆöv÷WB‚’çF†Vâ‚‚’Óâv–æF÷ræÆö6F–öâç&VÆöB‚’’æ6F6‚‚†W'&÷#¢W'&÷"’ÓâÖW76vRæW'&÷"†W'&÷"æÖW76vR’“²×Òóç¶6öçFVçGÓÂöF—cç²‡6÷W&6T÷VâÇÂF÷–4÷Vâ’bbÆF—b6Æ74æÖSÒ&f–vÖÖÖöFÂÖ&6¶G&÷#ãÆF—b6Æ74æÖSÒ&f–vÖÖÖöFÂ#ãÆ'WGFöâ6Æ74æÖSÒ&ÖöFÂÖ6Æ÷6R"G—SÒ&'WGFöâ"&–ÖÆ&VÃÒ.X[>™zÒ"öä6Æ–6³×²‚’Óâ²6WE6÷W&6T÷Vâ†fÇ6R“²6WEF÷–4÷Vâ†fÇ6R“²×ÓãÄ–6öâæÖSÒ&6Æ÷6R"6—¦S×³‡ÒóãÂö'WGFöãç·6÷W&6T÷VâòÃãÇ7â6Æ74æÖSÒ&W–V'&÷r#å4õU$4SÂ÷7ããÆƒ#ç·6÷W&6UG—RÓÓÒ&ÖçVÂ"ò.{)‹KNh˜¾Xª{JiÙ"¢.k{¾XªKúhşk©'ÓÂöƒ#ãÇç·6÷W&6UG—RÓÓÒ&ÖçVÂ"ò.y»Nhê^{)‹KNKˆiÚ{JiÙûÈÎKùŞZÙYîz¸¾XÛ>‹ù¾XZ^{JiÙkûÈÎiz™ÈXhŞzØ[è^˜x~™¸n8""¢6÷W&6UG—RÓÓÒ''72"ò.k{¾XªKˆKŠ¢%52Šê.™ˆ^YËYØûÈÎ{;¾{¹şKÉ®hÈyIşKª~{«şy¨Nš)xè~˜x~™¸nikXh^Zë8""¢6÷W&6UG—RÓÓÒ&–†÷Eö’"ò.hê^XZR’„õBiÈ‹ù#B[şi{n{+î˜‹XNŠêşûÈÎhÈZéikXˆn{¾ˆz®XªXZ^[©>8""¢.k{¾XªKˆKŠ®{Ùš^h‰njşyºîš^YËYØûÈÎ{;¾{¹şKÉ®hš¾høşš^™Ú.jÚ>ih~[›n˜XZ^[è^zÙ¾˜{JiÙ8"'ÓÂ÷ãÆf÷&Òöå7V&Ö—C×²†WfVçB’Óâ²WfVçBç&WfVçDFVfVÇB‚“²6öç7Bf÷&ÒÒæWrf÷&ÔFF†WfVçBæ7W'&VçEF&vWB“²–b‡6÷W&6UG—RÓÓÒ&ÖçVÂ"’²6öç7BF—FÆRÒ7G&–ær†f÷&ÒævWB‚'F—FÆR"’ÇÂ""’çG&–Ò‚“²6öç7B6öçFVçBÒ7G&–ær†f÷&ÒævWB‚&6öçFVçB"’ÇÂ""’çG&–Ò‚“²6öç7B6÷W&6TæÖRÒ7G&–ær†f÷&ÒævWB‚'6÷W&6UöæÖR"’ÇÂ.h˜¾Xª[Ù^XZR"’çG&–Ò‚“²–b‚F—FÆRÇÂ6öçFVçB’²ÖW76vRæW'&÷"‚.Šû~Z¾Xi{JiÙj~š)Y(ÎjÚ>ih~8""“²&WGW&ã²ÒFDÖçVÄÖFW&–Âæ×WFFR‡²F—FÆRÂ6öçFVçBÂ6÷W&6UöæÖS¢6÷W&6TæÖRÇÂ.h˜¾Xª[Ù^XZR"Ò“²&WGW&ã²Ò6öç7BæÖRÒ7G&–ær†f÷&ÒævWB‚&æÖR"’ÇÂ""’çG&–Ò‚“²6öç7BW&ÂÒ7G&–ær†f÷&ÒævWB‚'W&Â"’ÇÂ""’çG&–Ò‚“²6öç7B6FVv÷'’Ò7G&–ær†f÷&ÒævWB‚&6FVv÷'’"’ÇÂ""’çG&–Ò‚’ÇÂVæFVf–æVC²–b‚æÖRÇÂ‡6÷W&6UG—RÓÒ&–†÷Eö’"bbW&Â’’²ÖW76vRæW'&÷"‡6÷W&6UG—RÓÓÒ&–†÷Eö’"ò.Šû~Z¾XiKúhşk©YŞz{8""¢.Šû~Z¾XiKúhşk©YŞz{Y(ÎYËYØ8""“²&WGW&ã²ÒFE6÷W&6Ræ×WFFR‡²æÖRÂ6÷W&6U÷G—S¢6÷W&6UG—RÂW&ÂÂ6FVv÷'’Ò“²×ÓãÆÆ&VÃî{¾Yè³Ç6VÆV7BfÇVS×·6÷W&6UG—WÒöä6†ævS×²†WfVçB’Óâ6WE6÷W&6UG—R†WfVçBçF&vWBçfÇVR2''72"Â'W&Â"Â&ÖçVÂ"Â&–†÷Eö’"—ÓãÆ÷F–öâfÇVSÒ''72#å%52Šê.™ˆSÂö÷F–öããÆ÷F–öâfÇVSÒ'W&Â#î{ÙšRU$ÃÂö÷F–öããÆ÷F–öâfÇVSÒ&–†÷Eö’#ä’„õBûÈƒ#F‚{+î˜ûÈ“Âö÷F–öããÆ÷F–öâfÇVSÒ&ÖçVÂ#îh˜¾Xª{)‹KN{JiÙÂö÷F–öããÂ÷6VÆV7CãÂöÆ&VÃç·6÷W&6UG—RÓÓÒ&ÖçVÂ"òÃãÆÆ&VÃî{JiÙj~š)ƒÆ–çWBæÖSÒ'F—FÆR"&WV—&VBÆ6V†öÆFW#Ò.‹ùiÚ{JiÙŠë.K¸K˜ûÉò"óãÂöÆ&VÃãÆÆ&VÃî{JiÙjÚ>ihsÇFW‡F&VæÖSÒ&6öçFVçB"&WV—&VBÆ6V†öÆFW#Ò.{)‹KNZèÎi[NjÚ>ih~8i[Ù^h‰nKÚy¨Nh;>k9^(
-b"óãÂöÆ&VÃãÆÆ&VÃîiÚ^k©j~zÛîûÈXúş˜ûÈ“Æ–çWBæÖSÒ'6÷W&6UöæÖR"Æ6V†öÆFW#Ò.Kè¾Zh.ûÉ®h‰y¨NŠx.Zùò"óãÂöÆ&VÃãÂóâ¢6÷W&6UG—RÓÓÒ&–†÷Eö’"òÃãÆÆ&VÃîKúhşk©YŞz{Æ–çWBæÖSÒ&æÖR"&WV—&VBÆ6V†öÆFW#Ò.Kè¾Zh.ûÉ¤’„õB#F‚{+î˜’"óãÂöÆ&VÃãÆÆ&VÃîXˆn{¾ûÈXúş˜ûÈ“Ç6VÆV7BæÖSÒ&6FVv÷'’#ãÆ÷F–öâfÇVSÒ"#îXZ˜:Xˆn{³Âö÷F–öããÆ÷F–öâfÇVSÒ&’ÖÖöFVÇ2#ä’jŠYè³Âö÷F–öããÆ÷F–öâfÇVSÒ&’×&öGV7G2#ä’Kª~Y8Âö÷F–öããÆ÷F–öâfÇVSÒ&–æGW7G'’#îŠÎK‰®XªhÂö÷F–öããÆ÷F–öâfÇVSÒ'W"#îŠë®ihsÂö÷F–öããÆ÷F–öâfÇVSÒ'F—#îh¨[zsÂö÷F–öããÂ÷6VÆV7CãÂöÆ&VÃãÂóâ¢ÃãÆÆ&VÃîKúhşk©YŞz{Æ–çWBæÖSÒ&æÖR"&WV—&VBÆ6V†öÆFW#×·6÷W&6UG—RÓÓÒ''72"ò.Kè¾Zh.ûÉ£3nk
-¢%52"¢.Kè¾Zh.ûÉ¤Ô•BFV6†æöÆöw’&Wf–Wr'ÒóãÂöÆ&VÃãÆÆ&VÃç·6÷W&6UG—RÓÓÒ''72"ò%%52YËYØ"¢.{Ùš^YËYØ'ÓÆ–çWBæÖSÒ'W&Â"G—SÒ'W&Â"&WV—&VBÆ6V†öÆFW#Ò&‡GG3¢òòâââ"óãÂöÆ&VÃãÂóçÓÅ–ÆÄ'WGFöâG—SÒ'7V&Ö—B"FöæSÒ'–æ²#ç·6÷W&6UG—RÓÓÒ&ÖçVÂ"ò.XªXZ^{JiÙk"¢.k{¾XªKúhşk©'ÓÂõ–ÆÄ'WGFöããÂöf÷&ÓãÂóâ¢ÃãÇ7â6Æ74æÖSÒ&W–V'&÷r#ääUrDõ”3Â÷7ããÆƒ#îX‰¾[»®X	˜˜š)ƒÂöƒ#ãÇîXXzîŠêN˜š)ûÈÎXhŞ‹ù¾XZR’X‰¾KÙÎkXzˆ¾8#Â÷ãÆf÷&Òöå7V&Ö—C×²†WfVçB’Óâ²WfVçBç&WfVçDFVfVÇB‚“²7&VFUF÷–2æ×WFFR‚“²×ÓãÆÆ&VÃî˜š)j~š)ƒÆ–çWBfÇVS×·F÷–5F—FÆWÒöä6†ævS×²†WfVçB’Óâ6WEF÷–5F—FÆR†WfVçBçF&vWBçfÇVR—Ò&WV—&VBÆ6V†öÆFW#Ò.‹é>XZ^KˆKŠ®XÎ[é~X‰¾KÙÎy¨N˜š)‚"óãÂöÆ&VÃãÆÆ&VÃîh˜[îzÙnyZSÇ6VÆV7BfÇVS×·F÷–57G&FVw”–GÒöä6†ævS×²†WfVçB’Óâ6WEF÷–57G&FVw”–B†WfVçBçF&vWBçfÇVR—Ò&WV—&VCãÆ÷F–öâfÇVSÒ"#îŠû~˜hºzÙnyZSÂö÷F–öãç²‡7G&FVv–W2æFFÇÂµÒ’æÖ‚‡7G&FVw’’ÓâÆ÷F–öâ¶W“×·7G&FVw’æ–GÒfÇVS×·7G&FVw’æ–GÓç·7G&FVw’ææÖWÓÂö÷F–öãâ—ÓÂ÷6VÆV7CãÂöÆ&VÃãÅ–ÆÄ'WGFöâG—SÒ'7V&Ö—B"FöæSÒ'–æ²#îX‰¾[»®X	˜˜š)ƒÂõ–ÆÄ'WGFöããÂöf÷&ÓãÂóçÓÂöF—cãÂöF—cç×·6VÆV7FVDÖFW&–ÂbbçVÆÇÓÂöF—cã°Ğ§ĞĞ
+  return <button type="button" className={`material-card ${selected ? "is-selected" : ""}`} onClick={onSelect}><div className="material-card-top"><span className="figma-tag">{material.source_name || "ç§‘æŠ€èµ„è®¯"}</span><time>{formatTime(material.published_at || material.created_at)}</time></div><h3>{material.title}</h3><p>{shortText(material.content_excerpt || "æš‚æ— æ‘˜è¦")}</p><div className="material-card-bottom"><span>{material.source_name || "ä¿¡æ¯æº"}</span><span className="material-score">AI è¯„åˆ† {material.ai_score != null ? `${material.ai_score}%` : "â€”"}</span></div></button>;
+}
+
+function Materials({ materials, selectedId, onSelect, onIgnore, onUse, onAddSource }: { materials: Material[]; selectedId: string | null; onSelect: (id: string) => void; onIgnore: (id: string) => void; onUse: (material: Material) => void; onAddSource: () => void }) {
+  const selected = materials.find((item) => item.id === selectedId) ?? materials[0];
+  return <main className="figma-page materials-page"><div className="figma-page-heading"><div><h1><Icon name="image" size={26} />ç´ ææ±  <small>({materials.filter((item) => item.triage_status !== "ignored").length || 42})</small></h1><p>ä»ä¿¡æ¯æºä¸­ç­›é€‰ã€æ²‰æ·€çœŸæ­£å€¼å¾—åˆ›ä½œçš„å†…å®¹ä¾æ®ã€‚</p></div><div className="heading-actions"><button type="button" className="figma-link-button" onClick={() => { materials.filter(m => m.triage_status === "inbox").forEach(m => onIgnore(m.id)); }}>å…¨éƒ¨æ ‡è®°å·²è¯»</button><PillButton tone="pink" onClick={onAddSource}><Icon name="link" size={16} />æ·»åŠ ä¿¡æ¯æº</PillButton></div></div><section className="materials-layout"><div className="material-list">{materials.length ? materials.filter((item) => item.triage_status !== "ignored").slice(0, 12).map((item) => <MaterialCard key={item.id} material={item} selected={selected?.id === item.id} onSelect={() => onSelect(item.id)} />) : <Empty title="ç´ ææ± ä¸ºç©º" />}</div>{selected ? <aside className="material-detail"><div className="detail-heading"><h2>ç´ æè¯¦æƒ…</h2><button type="button" aria-label="å…³é—­" onClick={() => onSelect("")}><Icon name="close" size={18} /></button></div><div className="detail-meta"><span className="figma-tag">{selected.source_name || "ç§‘æŠ€èµ„è®¯"}</span><time>{formatTime(selected.published_at || selected.created_at)}</time></div><h2 className="detail-title">{selected.title}</h2><div className="detail-source"><span className="source-avatar"><Icon name="link" size={16} /></span><div><strong>{selected.source_name || "ä¿¡æ¯æº"}</strong><small>{selected.url || "å†…éƒ¨ç´ æåº“"}</small></div>{selected.url && <a href={selected.url} target="_blank" rel="noreferrer"><Icon name="external" size={16} /></a>}</div><div className="ai-summary"><div><span className="circle-icon circle-icon--pink"><Icon name="spark" size={16} /></span><strong>AI æ™ºèƒ½æ‘˜è¦</strong></div><p>{shortText(selected.content_excerpt || "AI å°†åœ¨è¿™é‡Œæç‚¼ç´ æä¸­çš„å…³é”®ä¿¡æ¯ã€äº‹å®ä¸å¯åˆ›ä½œè§’åº¦ã€‚", 210)}</p></div><h3>æ­£æ–‡å†…å®¹</h3><p className="detail-content">{selected.content_excerpt || "æš‚æ— æ­£æ–‡å†…å®¹ã€‚é€‰æ‹©è¿™æ¡ç´ æä½œä¸ºå†™ä½œä¾æ®åï¼Œå¯ä»¥åœ¨ç­–ç•¥é…ç½®ä¸­ç»§ç»­é€‰æ‹©å†™ä½œ Skillã€å» AI å‘³é“ Skillã€æ¨¡æ¿å’Œé…å›¾ã€‚"}</p><div className="detail-actions"><PillButton onClick={() => onIgnore(selected.id)}>å¿½ç•¥</PillButton><PillButton tone="pink" onClick={() => onUse(selected)}>é€‰ä½œå†™ä½œä¾æ® <Icon name="chevron" size={15} /></PillButton></div></aside> : null}</section></main>;
+}
+
+function TopicCard({ topic, featured = false, onConfirm }: { topic: Topic; featured?: boolean; onConfirm: () => void }) {
+  return <article className={`topic-card ${featured ? "topic-card--featured" : ""}`}><div className="topic-card-top"><span className="figma-tag">{featured ? "æœ¬å‘¨å¼ºæ¨" : "AI æ¨è"}</span><strong>{topic.score || (featured ? 98 : 92)}<small>åˆ†</small></strong></div><h3>{topic.title}</h3><p>{shortText(topic.rationale || "åŸºäºçƒ­ç‚¹è¶‹åŠ¿ã€ç”¨æˆ·å…´è¶£ä¸ä¿¡æ¯æºå†…å®¹ç”Ÿæˆçš„åˆ›ä½œå»ºè®®ã€‚", 118)}</p><div className="topic-card-footer"><span>AI æ´å¯Ÿ Â· {topic.scores?.[0]?.dimension || "è¶‹åŠ¿"}</span><PillButton tone={featured ? "pink" : "soft"} onClick={onConfirm}>ç¡®è®¤é€‰é¢˜ <Icon name="chevron" size={14} /></PillButton></div></article>;
+}
+
+function Topics({ topics, onConfirm, onNew, onEditor }: { topics: Topic[]; onConfirm: (topic: Topic) => void; onNew: () => void; onEditor: () => void }) {
+  const candidate = topics.filter((item) => item.status === "candidate");
+  const featured = candidate[0] ?? topics[0];
+  return <main className="figma-page topics-page"><div className="figma-page-heading"><div><h1>é€‰é¢˜ä¸åˆ›ä½œ</h1><p>æµè§ˆ AI ä¸ºæ‚¨é‡èº«å®šåˆ¶çš„çƒ­é—¨é€‰é¢˜ï¼Œæˆ–ç›´æ¥å¼€å§‹åˆ›ä½œã€‚</p></div><PillButton tone="pink" onClick={onNew}><Icon name="edit" size={16} />æ‰‹åŠ¨åˆ›å»ºé€‰é¢˜</PillButton></div><div className="figma-tabs"><button className="is-active" type="button">å€™é€‰é€‰é¢˜ <b>{candidate.length || 12}</b></button><button type="button" onClick={onEditor}>æ–‡ç« åˆ›ä½œ <b>â†’</b></button></div>{featured ? <section className="topics-bento"><div className="topic-featured-column"><TopicCard topic={featured} featured onConfirm={() => onConfirm(featured)} /><div className="ai-insight"><span className="circle-icon circle-icon--cyan"><Icon name="spark" size={18} /></span><div><strong>AI æ´å¯Ÿ</strong><p>ä»Šå¤©çš„çƒ­ç‚¹é›†ä¸­åœ¨æ™ºèƒ½ç¡¬ä»¶ã€AI åº”ç”¨å’Œå†…å®¹åˆ›ä½œæ•ˆç‡ï¼Œå»ºè®®ä¼˜å…ˆå…³æ³¨æœ‰æ˜ç¡®ç”¨æˆ·åœºæ™¯çš„é€‰é¢˜ã€‚</p></div></div></div><div className="topic-recommendations"><div className="section-title"><div><span className="eyebrow">TODAY'S PICKS</span><h2>AI æ¨èåˆ—è¡¨</h2></div><button type="button" onClick={onNew}>æ¢ä¸€æ‰¹ <Icon name="refresh" size={15} /></button></div>{candidate.slice(1, 4).map((topic, index) => <TopicCard key={topic.id} topic={topic} onConfirm={() => onConfirm(topic)} />)}{!candidate.slice(1, 4).length && <Empty title="æš‚æ— å€™é€‰é€‰é¢˜" />}</div></section> : <Empty title="æš‚æ— å€™é€‰é€‰é¢˜" />}</main>;
+}
+
+function PhonePreview({ title, html }: { title?: string; html?: string }) {
+  return (
+    <div className="wechat-preview-card">
+      {title && <h2 className="wechat-preview-title">{title}</h2>}
+      {html
+        ? <div className="wechat-preview-content" dangerouslySetInnerHTML={{ __html: html }} />
+        : <p className="wechat-preview-placeholder">é€‰æ‹©æ–‡ç« å’Œæ’ç‰ˆä¸»é¢˜åå³å¯é¢„è§ˆæ•ˆæœ</p>
+      }
+    </div>
+  );
+}
+
+/* ---- æ­¥éª¤å‘å¯¼ Stepper ---- */
+
+const REVIEW_STEPS = [
+  { key: "article", label: "é€‰æ‹©æ–‡ç« ", icon: "article" as IconName },
+  { key: "skill", label: "å†™ä½œ Skill", icon: "magic" as IconName },
+  { key: "theme", label: "é€‰æ‹©æ¨¡æ¿", icon: "image" as IconName },
+  { key: "preview", label: "ç”Ÿæˆé¢„è§ˆ", icon: "eye" as IconName },
+  { key: "channel", label: "é€‰æ‹©å…¬ä¼—å·", icon: "send" as IconName },
+  { key: "draft", label: "å†™å…¥è‰ç¨¿", icon: "check" as IconName },
+] as const;
+
+function StepNavVertical({ current, onStep }: { current: number; onStep: (step: number) => void }) {
+  return (
+    <nav className="step-nav-vertical">
+      {REVIEW_STEPS.map((step, index) => (
+        <button
+          key={step.key}
+          type="button"
+          className={`step-nav-item ${index === current ? "is-active" : ""} ${index < current ? "is-done" : ""}`}
+          onClick={() => onStep(index)}
+        >
+          <span className="step-nav-icon">
+            {index < current ? <Icon name="check" size={14} /> : <Icon name={step.icon} size={14} />}
+          </span>
+          <span className="step-nav-label">
+            <strong>{step.label}</strong>
+            <small>æ­¥éª¤ {index + 1}</small>
+          </span>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+function Review({
+  articles, selectedId, onSelect, onApprove, onRequestChanges, onEditor, onDraft, onPublish,
+  thumbMediaId, onUpload, themes, selectedThemeId, onThemeChange,
+  channels, selectedChannelId, onChannelChange,
+  skills, selectedSkillId, onSkillChange,
+  pending, themePreviewHtml, coverPreviewUrl,
+}: {
+  articles: Article[]; selectedId: string | null; onSelect: (id: string) => void;
+  onApprove: (article: Article) => void; onRequestChanges: (article: Article) => void;
+  onEditor: (id: string) => void; onDraft: (article: Article) => void; onPublish: (article: Article) => void;
+  thumbMediaId: string; onUpload: (file: File) => void;
+  themes: Theme[]; selectedThemeId: string; onThemeChange: (id: string) => void;
+  channels: ChannelAccount[]; selectedChannelId: string; onChannelChange: (id: string) => void;
+  skills: Skill[]; selectedSkillId: string; onSkillChange: (id: string) => void;
+  pending: boolean; themePreviewHtml?: string; coverPreviewUrl?: string;
+}) {
+  const [step, setStep] = useState(0);
+  const pendingArticles = articles.filter((item) => !["published", "wechat_draft"].includes(item.status));
+  const article = articles.find((item) => item.id === selectedId) ?? pendingArticles[0] ?? articles[0];
+  const revision = article?.revisions?.[article.revisions.length - 1];
+
+  const canApprove = article && !pending;
+  const canCreateDraft = Boolean(selectedChannelId) && Boolean(thumbMediaId) && article && revision;
+
+  const selectedChannel = channels.find((c) => c.id === selectedChannelId);
+
+  return (
+    <main className="figma-page review-page">
+      <div className="figma-page-heading">
+        <div>
+          <h1>å®¡æ ¸ä¸å‘å¸ƒ</h1>
+          <p>æŒ‰æ­¥éª¤å®Œæˆæ–‡ç« å®¡æ ¸ã€é…ç½®å’Œå¾®ä¿¡è‰ç¨¿åˆ›å»ºã€‚</p>
+        </div>
+        <span className="review-count">å¾…å®¡æ ¸ <strong>{pendingArticles.length || 0}</strong></span>
+      </div>
+
+      <section className="review-wizard-layout">
+        {/* Left: æ­¥éª¤å¯¼èˆª */}
+        <StepNavVertical current={step} onStep={setStep} />
+
+        {/* Middle: å®æ—¶é¢„è§ˆ */}
+        <div className="review-preview-panel">
+          <div className="preview-label">
+            <span className="eyebrow">LIVE PREVIEW</span>
+            <h2>å®æ—¶é¢„è§ˆ</h2>
+          </div>
+          <div className="phone-frame">
+            <PhonePreview title={article?.title} html={themePreviewHtml} />
+          </div>
+        </div>
+
+        {/* Right: æ“ä½œåŒº */}
+        <div className="review-action-panel">
+          {/* Step 0: é€‰æ‹©æ–‡ç«  */}
+          {step === 0 && (
+            <>
+              <div className="step-section">
+                <div className="strategy-section-title">
+                  <span className="circle-icon circle-icon--pink"><Icon name="article" size={18} /></span>
+                  <div><h2>é€‰æ‹©æ–‡ç« </h2><p>é€‰æ‹©ä¸€ç¯‡å¾…å®¡æ ¸æ–‡ç« </p></div>
+                </div>
+              </div>
+              <div className="review-article-scroll">
+                {pendingArticles.map((item) => (
+                  <button
+                    key={item.id}
+                    className={`review-article-mini ${article?.id === item.id ? "is-selected" : ""}`}
+                    type="button"
+                    onClick={() => onSelect(item.id)}
+                  >
+                    <strong>{item.title}</strong>
+                    <small>AI åˆ›ä½œ Â· {formatTime(item.revisions?.[0]?.created_by)}</small>
+                    <span className="review-article-mini-foot">
+                      AI è¯„åˆ† {item.review?.auto_result?.score ? `${item.review.auto_result.score}%` : "98%"}
+                      <em>{item.status === "approved" ? "å·²é€šè¿‡" : "å¾…å®¡æ ¸"}</em>
+                    </span>
+                  </button>
+                ))}
+                {!pendingArticles.length && <div className="skill-empty">æš‚æ— å¾…å®¡æ ¸æ–‡ç« </div>}
+              </div>
+              {article && (
+                <div className="ai-summary" style={{ marginTop: 0 }}>
+                  <div><span className="circle-icon circle-icon--pink"><Icon name="spark" size={14} /></span><strong>AI æ‘˜è¦</strong></div>
+                  <p style={{ fontSize: 11 }}>{shortText(revision?.content_markdown || "", 180) || "æ–‡ç« å°šæœªç”Ÿæˆå®Œæ•´å†…å®¹ã€‚"}</p>
+                </div>
+              )}
+              <div className="review-article-actions">
+                <PillButton onClick={() => article && onRequestChanges(article)} disabled={!canApprove}>æ‰“å›é‡å†™</PillButton>
+                <PillButton tone="pink" onClick={() => article && onApprove(article)} disabled={!canApprove}>å®¡æ ¸é€šè¿‡</PillButton>
+                <PillButton tone="purple" onClick={() => article && onEditor(article.id)} disabled={!article}>ç¼–è¾‘</PillButton>
+              </div>
+            </>
+          )}
+
+          {/* Step 1: é€‰æ‹©å†™ä½œ Skill */}
+          {step === 1 && (
+            <div className="step-section">
+              <div className="strategy-section-title">
+                <span className="circle-icon circle-icon--pink"><Icon name="magic" size={18} /></span>
+                <div><h2>å†™ä½œ Skill</h2><p>é€‰æ‹©å†™ä½œæŠ€èƒ½åŒ…</p></div>
+              </div>
+              <div className="skill-module-grid" style={{ marginTop: 12 }}>
+                {skills.filter(s => s.status === "published").map((item) => (
+                  <button
+                    type="button" key={item.id}
+                    className={`skill-module ${selectedSkillId === item.id ? "is-selected" : ""}`}
+                    onClick={() => onSkillChange(item.id)}
+                  >
+                    <span className="skill-module-icon"><Icon name="magic" size={16} /></span>
+                    <span><strong>{item.name}</strong><small>{item.skill_type} Â· v{item.version}</small></span>
+                    <em>{selectedSkillId === item.id ? "å·²é€‰" : ""}</em>
+                  </button>
+                ))}
+                {skills.filter(s => s.status === "published").length === 0 && (
+                  <div className="skill-empty">è¿˜æ²¡æœ‰å·²å‘å¸ƒçš„ Skillã€‚</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Step 2: é€‰æ‹©æ¨¡æ¿ */}
+          {step === 2 && (
+            <div className="step-section">
+              <div className="strategy-section-title">
+                <span className="circle-icon circle-icon--purple"><Icon name="image" size={18} /></span>
+                <div><h2>æ’ç‰ˆæ¨¡æ¿</h2><p>é€‰æ‹©æ’ç‰ˆæ ·å¼</p></div>
+              </div>
+              <div className="template-grid" style={{ marginTop: 12, gridTemplateColumns: "1fr 1fr" }}>
+                {themes.filter(t => t.enabled).map((theme) => {
+                  const tokens = (theme.tokens || {}) as Record<string, string>;
+                  return (
+                    <button
+                      type="button" key={theme.id}
+                      className={selectedThemeId === theme.id ? "is-selected" : ""}
+                      onClick={() => onThemeChange(theme.id)}
+                    >
+                      <span className="theme-preview" style={{ background: tokens.surface || "#fff", color: tokens.text || "#222", borderColor: tokens.accent || "#e040a0" }}>
+                        <i style={{ background: tokens.accent || "#e040a0" }} />
+                        <i style={{ background: tokens.muted || "#b7a8b8" }} />
+                        <b style={{ background: tokens.accent || "#e040a0" }} />
+                        <small style={{ background: tokens.muted || "#b7a8b8" }} />
+                      </span>
+                      <strong>{theme.name}</strong>
+                      <small className="template-description">{shortText(theme.description || "", 20)}</small>
+                      {selectedThemeId === theme.id && <em>âœ“</em>}
+                    </button>
+                  );
+                })}
+                {themes.filter(t => t.enabled).length === 0 && (
+                  <div className="skill-empty">è¿˜æ²¡æœ‰å¯ç”¨æ’ç‰ˆæ¨¡æ¿ã€‚</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: é¢„è§ˆç¡®è®¤ */}
+          {step === 3 && (
+            <div className="step-section">
+              <div className="strategy-section-title">
+                <span className="circle-icon circle-icon--cyan"><Icon name="eye" size={18} /></span>
+                <div>
+                  <h2>é¢„è§ˆç¡®è®¤</h2>
+                  <p>{article?.title || "è¯·å…ˆé€‰æ‹©æ–‡ç« "}</p>
+                  <p style={{ marginTop: 4 }}>{themes.find(t => t.id === selectedThemeId)?.name || "é»˜è®¤ä¸»é¢˜"} Â· {skills.find(s => s.id === selectedSkillId)?.name || "é»˜è®¤ Skill"}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 4: é€‰æ‹©å…¬ä¼—å· + å°é¢ */}
+          {step === 4 && (
+            <>
+              <div className="step-section">
+                <div className="strategy-section-title">
+                  <span className="circle-icon circle-icon--cyan"><Icon name="send" size={18} /></span>
+                  <div><h2>å…¬ä¼—å· & å°é¢</h2><p>é€‰æ‹©å‘å¸ƒè´¦å·å’Œä¸Šä¼ å°é¢</p></div>
+                </div>
+              </div>
+              <div className="publish-card" style={{ marginBottom: 0 }}>
+                <div>
+                  <span className="circle-icon circle-icon--cyan"><Icon name="send" size={18} /></span>
+                  <div>
+                    <strong>åŒæ­¥åˆ°å¾®ä¿¡å…¬ä¼—å·</strong>
+                    <small>{selectedChannel?.name || "å°šæœªé€‰æ‹©å‘å¸ƒè´¦å·"}</small>
+                  </div>
+                </div>
+                <select value={selectedChannelId} onChange={(e) => onChannelChange(e.target.value)}>
+                  <option value="">é€‰æ‹©è´¦å·</option>
+                  {channels.map((channel) => (
+                    <option key={channel.id} value={channel.id}>{channel.name}</option>
+                  ))}
+                </select>
+                {selectedChannel && (
+                  <div className="channel-info">
+                    <span>è¿æ¥çŠ¶æ€ <b className={selectedChannel.enabled ? "text-green" : "text-red"}>{selectedChannel.enabled ? "å·²è¿æ¥" : "æœªè¿æ¥"}</b></span>
+                    <span>å‘å¸ƒæƒé™ <b className={selectedChannel.capabilities?.publish ? "text-green" : "text-red"}>{selectedChannel.capabilities?.publish ? "å¯å‘å¸ƒ" : "ä»…è‰ç¨¿"}</b></span>
+                  </div>
+                )}
+              </div>
+              <div className="cover-card" style={{ marginBottom: 0 }}>
+                <div className="cover-image">
+                  <img src={coverPreviewUrl || COVER_PLACEHOLDER} alt="å°é¢é¢„è§ˆ" />
+                </div>
+                <div className="cover-info">
+                  <span className="eyebrow">COVER</span>
+                  <h3>å°é¢å›¾ç‰‡</h3>
+                  <p>{thumbMediaId ? `å·²ä¸Šä¼  media_id: ${thumbMediaId.slice(0, 16)}...` : "è¯·ä¸Šä¼  JPG/PNG æ ¼å¼å°é¢"}</p>
+                </div>
+                <label className="upload-cover">
+                  <Icon name="upload" size={18} />
+                  {thumbMediaId ? "é‡æ–°ä¸Šä¼ " : "ä¸Šä¼ å°é¢"}
+                  <input type="file" accept="image/*" onChange={(e) => { const file = e.target.files?.[0]; if (file) onUpload(file); }} />
+                </label>
+              </div>
+            </>
+          )}
+
+          {/* Step 5: åˆ›å»ºè‰ç¨¿ */}
+          {step === 5 && (
+            <>
+              <div className="step-section">
+                <div className="strategy-section-title">
+                  <span className="circle-icon circle-icon--green"><Icon name="check" size={18} /></span>
+                  <div><h2>ç¡®è®¤åˆ›å»ºè‰ç¨¿</h2><p>ç¡®è®¤é…ç½®æ— è¯¯åå†™å…¥å¾®ä¿¡è‰ç¨¿</p></div>
+                </div>
+              </div>
+              <div className="summary-grid" style={{ marginTop: 0, gridTemplateColumns: "1fr" }}>
+                <div className="summary-item">
+                  <span className="summary-icon"><Icon name="article" size={16} /></span>
+                  <div><small>æ–‡ç« </small><strong>{article?.title || "â€”"}</strong></div>
+                </div>
+                <div className="summary-item">
+                  <span className="summary-icon"><Icon name="magic" size={16} /></span>
+                  <div><small>Skill</small><strong>{skills.find(s => s.id === selectedSkillId)?.name || "ç³»ç»Ÿé»˜è®¤"}</strong></div>
+                </div>
+                <div className="summary-item">
+                  <span className="summary-icon"><Icon name="image" size={16} /></span>
+                  <div><small>æ¨¡æ¿</small><strong>{themes.find(t => t.id === selectedThemeId)?.name || "â€”"}</strong></div>
+                </div>
+                <div className="summary-item">
+                  <span className="summary-icon"><Icon name="send" size={16} /></span>
+                  <div><small>å…¬ä¼—å·</small><strong>{selectedChannel?.name || "â€”"}</strong></div>
+                </div>
+                <div className="summary-item">
+                  <span className="summary-icon"><Icon name="image" size={16} /></span>
+                  <div><small>å°é¢</small><strong>{thumbMediaId ? "å·²ä¸Šä¼ " : "æœªä¸Šä¼ "}</strong></div>
+                </div>
+              </div>
+              <div className="draft-actions" style={{ marginTop: 12, justifyContent: "stretch" }}>
+                <PillButton tone="pink" onClick={() => article && onDraft(article)} disabled={!canCreateDraft || pending}>
+                  åˆ›å»ºå¾®ä¿¡è‰ç¨¿
+                </PillButton>
+                {article?.status === "wechat_draft" && (
+                  <PillButton tone="purple" onClick={() => article && onPublish(article)} disabled={pending}>
+                    æäº¤å‘å¸ƒ
+                  </PillButton>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* æ­¥éª¤å¯¼èˆªæŒ‰é’® */}
+          <div className="step-navigation">
+            <PillButton onClick={() => setStep(Math.max(0, step - 1))} disabled={step === 0}>
+              ä¸Šä¸€æ­¥
+            </PillButton>
+            <div className="step-info">æ­¥éª¤ {step + 1} / {REVIEW_STEPS.length}</div>
+            {step < REVIEW_STEPS.length - 1 && (
+              <PillButton tone="pink" onClick={() => setStep(step + 1)}>
+                ä¸‹ä¸€æ­¥
+              </PillButton>
+            )}
+          </div>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function ArticleEditor({ article, onBack, onSave, saving }: { article?: Article; onBack: () => void; onSave: (articleId: string, title: string, markdown: string) => void; saving: boolean }) {
+  const revision = article?.revisions?.[article.revisions.length - 1];
+  const [title, setTitle] = useState(article?.title || "");
+  const [markdown, setMarkdown] = useState(revision?.content_markdown || "");
+  useEffect(() => {
+    setTitle(article?.title || "");
+    setMarkdown(revision?.content_markdown || "");
+  }, [article?.id, revision?.id]);
+  if (!article) return <main className="figma-page"><Empty title="æš‚æ— å¯ç¼–è¾‘æ–‡ç« " /></main>;
+  return <main className="figma-page article-editor-page"><div className="figma-page-heading"><div><button type="button" className="figma-link-button" onClick={onBack}>â† è¿”å›ä¸Šä¸€é¡µ</button><h1>ç¼–è¾‘æ–‡ç« </h1><p>ä¿å­˜ä¼šåˆ›å»ºæ–°ç‰ˆæœ¬å¹¶é€å›å¾…å®¡æ ¸ï¼›å·²å­˜åœ¨çš„å¾®ä¿¡è‰ç¨¿ä¸ä¼šè‡ªåŠ¨æ›´æ–°ã€‚</p></div><PillButton tone="pink" onClick={() => onSave(article.id, title.trim(), markdown)} disabled={saving || !title.trim() || !markdown.trim()}>{saving ? "ä¿å­˜ä¸­..." : "ä¿å­˜å¹¶é‡æ–°é€å®¡"}</PillButton></div><section className="article-editor-layout"><div className="article-editor-pane"><label className="article-title-field"><span>æ–‡ç« æ ‡é¢˜</span><input maxLength={500} value={title} onChange={(event) => setTitle(event.target.value)} /></label><div className="editor-pane-head"><span className="eyebrow">MARKDOWN EDITOR</span><span>è‡ªåŠ¨ä¿å­˜å…³é—­ Â· æ‰‹åŠ¨ä¿å­˜ç‰ˆæœ¬</span></div><textarea value={markdown} onChange={(event) => setMarkdown(event.target.value)} /></div><div className="article-render-pane"><div className="editor-pane-head"><span className="eyebrow">CURRENT PREVIEW</span><span>ä¿å­˜å‰ä¸ºå½“å‰ç‰ˆæœ¬é¢„è§ˆ</span></div><PhonePreview title={title} html={revision?.rendered_html} /></div></section></main>;
+}
+
+type ModelFormPayload = { provider: ModelProvider; name: string; api_base_url: string; api_key: string };
+
+function sourceTypeLabel(type: string) {
+  if (type === "rss") return "RSS";
+  if (type === "url") return "ç½‘é¡µ";
+  if (type === "aihot_api") return "AI HOT";
+  if (type === "manual") return "æ‰‹åŠ¨";
+  return type.toUpperCase();
+}
+
+function SourceCenter({ sources, onAdd, onAddRecommended, onCollect, onUpdate, onDisable }: { sources: Source[]; onAdd: () => void; onAddRecommended: (source: RecommendedSource) => Promise<void>; onCollect: (id: string) => Promise<void>; onUpdate: (id: string, source: Source) => Promise<void>; onDisable: (id: string) => Promise<void> }) {
+  const [pendingId, setPendingId] = useState<string | null>(null);
+  const [editing, setEditing] = useState<Source | null>(null);
+  const [form, setForm] = useState({ name: "", url: "" });
+  const run = async (id: string, action: (id: string) => Promise<void>) => {
+    setPendingId(id);
+    try { await action(id); } catch { /* The mutation reports the user-facing error. */ } finally { setPendingId(null); }
+  };
+  const edit = (source: Source) => {
+    setEditing(source);
+    setForm({ name: source.name, url: source.url });
+  };
+  const save = async () => {
+    if (!editing || !form.name.trim() || (editing.source_type !== "manual" && editing.source_type !== "aihot_api" && !form.url.trim())) return;
+    setPendingId(editing.id);
+    try {
+      await onUpdate(editing.id, { ...editing, name: form.name.trim(), url: form.url.trim(), enabled: editing.enabled });
+      setEditing(null);
+    } catch { /* The mutation reports the user-facing error. */ } finally { setPendingId(null); }
+  };
+  const restore = (source: Source) => onUpdate(source.id, { ...source, enabled: true });
+
+  return (
+    <main className="figma-page">
+      <div className="figma-page-heading"><div><h1><span className="title-icon"><Icon name="link" size={22} /></span>é‡‡é›†è®¾ç½®</h1><p>ä¿¡æ¯æºåªè´Ÿè´£æŠŠå†…å®¹é‡‡é›†åˆ°ç´ ææ± ï¼›è‡ªåŠ¨åŒ–ç”Ÿäº§çº¿ä»ç´ ææ± åˆ†ç±»ä¸­é€‰æã€‚</p></div><PillButton tone="pink" onClick={onAdd}>+ æ·»åŠ ä¿¡æ¯æº</PillButton></div>
+      <section className="recommended-sources" aria-label="æ¨èä¿¡æ¯æº">
+        <div><strong>ä¼˜è´¨æ¨è</strong><span>å®˜æ–¹äº§å“åŠ¨æ€ã€å¼€æºç¤¾åŒºä¸è®ºæ–‡æ¥æºï¼Œç‚¹å‡»åæ‰ä¼šæ·»åŠ åˆ°ä½ çš„ä¿¡æ¯æºåˆ—è¡¨ã€‚</span></div>
+        <div className="recommended-source-list">{RECOMMENDED_SOURCES.map((source) => {
+          const exists = sources.some((item) => item.url.replace(/\/$/, "") === source.url.replace(/\/$/, ""));
+          return <button key={source.url} type="button" disabled={exists || pendingId === source.url} onClick={() => void run(source.url, () => onAddRecommended(source))}>
+            <strong>{source.name}</strong><small>{source.description}</small><em>{exists ? "å·²æ·»åŠ " : pendingId === source.url ? "æ·»åŠ ä¸­â€¦" : "æ·»åŠ "}</em>
+          </button>;
+        })}</div>
+      </section>
+      <section className="model-page-section source-page-section">
+        {!sources.length ? <div className="model-empty-hint">è¿˜æ²¡æœ‰ä¿¡æ¯æºã€‚æ·»åŠ  RSSã€ç½‘é¡µ URL æˆ–æ‰‹åŠ¨æ¥æºåï¼Œå®ƒä»¬ä¼šå‡ºç°åœ¨è¿™é‡Œã€‚</div> : <div className="source-list">{sources.map((source) => <div key={source.id} className="source-list-item"><div className="source-list-main"><span className="model-list-provider">{sourceTypeLabel(source.source_type)}</span><strong>{source.name}</strong><span className="source-list-url">{source.url || "æ‰‹åŠ¨å½•å…¥"}</span>{source.last_error && <small className="source-list-error">æœ€è¿‘å¤±è´¥ï¼š{source.last_error}</small>}</div><div className="source-list-actions"><StatusPill tone={source.enabled ? "green" : "neutral"}>{source.enabled ? "å¯ç”¨" : "å·²åœç”¨"}</StatusPill><button type="button" className="text-action" onClick={() => edit(source)}>ç¼–è¾‘</button>{source.enabled && source.source_type !== "manual" && <button type="button" className="text-action" disabled={pendingId === source.id} onClick={() => void run(source.id, onCollect)}>{pendingId === source.id ? "é‡‡é›†ä¸­â€¦" : "ç«‹å³é‡‡é›†"}</button>}{source.enabled ? <button type="button" className="text-action text-action--danger" disabled={pendingId === source.id} onClick={() => void run(source.id, onDisable)}>åœç”¨</button> : <button type="button" className="text-action" disabled={pendingId === source.id} onClick={() => void run(source.id, () => restore(source))}>æ¢å¤</button>}</div></div>)}</div>}
+      </section>
+      {editing && <div className="figma-modal-backdrop" role="presentation" onClick={(event) => { if (event.target === event.currentTarget) setEditing(null); }}><section className="figma-modal" role="dialog" aria-modal="true" aria-label="ç¼–è¾‘ä¿¡æ¯æº"><button className="modal-close" type="button" aria-label="å…³é—­" onClick={() => setEditing(null)}><Icon name="close" size={18} /></button><span className="eyebrow">COLLECTION SOURCE</span><h2>ç¼–è¾‘ä¿¡æ¯æº</h2><p>ä¿®æ”¹åªå½±å“åç»­é‡‡é›†ï¼Œå·²ç»è¿›å…¥ç´ ææ± çš„å†å²å†…å®¹ä¿æŒä¸å˜ã€‚</p><label>åç§°<input value={form.name} onChange={(event) => setForm((value) => ({ ...value, name: event.target.value }))} /></label>{editing.source_type !== "manual" && editing.source_type !== "aihot_api" && <label>{editing.source_type === "rss" ? "RSS åœ°å€" : "ç½‘é¡µåœ°å€"}<input type="url" value={form.url} onChange={(event) => setForm((value) => ({ ...value, url: event.target.value }))} /></label>}{editing.source_type === "aihot_api" && <label>åˆ†ç±»<select value={String((editing.config?.category) || "")} onChange={(event) => setEditing({ ...editing, config: { ...(editing.config || {}), category: event.target.value || undefined } })}><option value="">å…¨éƒ¨åˆ†ç±»</option><option value="ai-models">AI æ¨¡å‹</option><option value="ai-products">AI äº§å“</option><option value="industry">è¡Œä¸šåŠ¨æ€</option><option value="paper">è®ºæ–‡</option><option value="tip">æŠ€å·§</option></select></label>}<PillButton tone="pink" disabled={pendingId === editing.id} onClick={() => void save()}>{pendingId === editing.id ? "ä¿å­˜ä¸­â€¦" : "ä¿å­˜ä¿®æ”¹"}</PillButton></section></div>}
+    </main>
+  );
+}
+type ChannelFormPayload = { name: string; app_id: string; app_secret: string; publish_enabled: boolean };
+
+function ChannelCenter({ accounts, onAdd, onUpdate, onTest, onDisable }: { accounts: ChannelAccount[]; onAdd: (payload: ChannelFormPayload) => Promise<void>; onUpdate: (id: string, payload: ChannelFormPayload & { enabled?: boolean }) => Promise<void>; onTest: (id: string) => void; onDisable: (id: string) => Promise<void> }) {
+  const emptyForm = (): ChannelFormPayload => ({ name: "", app_id: "", app_secret: "", publish_enabled: false });
+  const [form, setForm] = useState<ChannelFormPayload>(emptyForm());
+  const [editing, setEditing] = useState<ChannelAccount | null>(null);
+  const [open, setOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState("");
+  const close = () => { setOpen(false); setEditing(null); setForm(emptyForm()); setFormError(""); };
+  const startEdit = (account: ChannelAccount) => { setEditing(account); setForm({ name: account.name, app_id: "", app_secret: "", publish_enabled: Boolean(account.capabilities.publish) }); setFormError(""); setOpen(true); };
+  const submit = async () => {
+    if (!form.name.trim() || !form.app_id.trim() || !form.app_secret.trim()) { setFormError("è¯·å¡«å†™å…¬ä¼—å·åç§°ã€AppID å’Œ AppSecretã€‚"); return; }
+    setSubmitting(true);
+    setFormError("");
+    try {
+      if (editing) await onUpdate(editing.id, { ...form, name: form.name.trim(), app_id: form.app_id.trim(), app_secret: form.app_secret.trim() });
+      else await onAdd({ ...form, name: form.name.trim(), app_id: form.app_id.trim(), app_secret: form.app_secret.trim() });
+      close();
+    } catch (error) { setFormError(error instanceof Error ? error.message : "ä¿å­˜å¤±è´¥ï¼Œè¯·æ£€æŸ¥å‡­è¯åé‡è¯•ã€‚"); } finally { setSubmitting(false); }
+  };
+  const restore = async (account: ChannelAccount) => { setSubmitting(true); try { await onUpdate(account.id, { ...emptyForm(), name: account.name, enabled: true }); } finally { setSubmitting(false); } };
+
+  return <main className="figma-page model-center-page"><div className="figma-page-heading"><div><h1><span className="title-icon"><Icon name="send" size={22} /></span>å…¬ä¼—å·è´¦å·</h1><p>ç»‘å®šå…¬ä¼—å· AppID ä¸ AppSecretã€‚å‡­è¯ä»…åœ¨ä¿å­˜æ—¶å‘é€ï¼Œé¡µé¢ä¸ä¼šå›æ˜¾ï¼›é»˜è®¤åªå…è®¸åˆ›å»ºè‰ç¨¿ã€‚</p></div><PillButton tone="pink" onClick={() => { setForm(emptyForm()); setEditing(null); setFormError(""); setOpen(true); }}>+ ç»‘å®šå…¬ä¼—å·</PillButton></div><section className="model-guidance"><strong>ä½¿ç”¨å‰è¯·ç¡®è®¤ï¼š</strong><span>å·²åœ¨å¾®ä¿¡å…¬ä¼—å¹³å°é…ç½®æœåŠ¡å™¨å‡ºå£ IP ç™½åå•ï¼›åªæœ‰ç®¡ç†å‘˜å¯åœ¨ç»‘å®šæ—¶æ‰“å¼€æ­£å¼å‘å¸ƒæƒé™ã€‚</span></section><section className="model-page-section">{!accounts.length ? <div className="model-empty-hint">è¿˜æ²¡æœ‰ç»‘å®šå…¬ä¼—å·ã€‚ç»‘å®šåå¯åœ¨ç­–ç•¥ä¸æˆç¨¿åº“ä¸­é€‰æ‹©å®ƒæ¥åˆ›å»ºè‰ç¨¿ã€‚</div> : <div className="model-list">{accounts.map((account) => { const readonly = account.config.source === "environment"; return <div key={account.id} className="model-list-item"><div className="model-list-main"><span className="model-list-provider">WECHAT</span><strong>{account.name}</strong><span className={account.has_credentials ? "model-list-key" : "model-list-key miss"}><Icon name={account.has_credentials ? "check" : "close"} size={10} />{account.has_credentials ? "å‡­è¯å·²é…ç½®" : "å‡­è¯æœªé…ç½®"}</span></div><div className="model-list-actions"><StatusPill tone={account.enabled ? "green" : "neutral"}>{account.enabled ? "å¯ç”¨ä¸­" : "å·²åœç”¨"}</StatusPill><StatusPill tone={account.capabilities.publish ? "green" : "blue"}>{account.capabilities.publish ? "å¯å‘å¸ƒ" : "ä»…è‰ç¨¿"}</StatusPill>{readonly ? <span className="account-readonly">ç¯å¢ƒé…ç½®</span> : <><button type="button" className="text-action" disabled={submitting} onClick={() => onTest(account.id)}>æµ‹è¯•</button><button type="button" className="text-action" disabled={submitting} onClick={() => startEdit(account)}>ç¼–è¾‘å‡­è¯</button>{account.enabled ? <button type="button" className="text-action text-action--danger" disabled={submitting} onClick={() => void onDisable(account.id)}>åœç”¨</button> : <button type="button" className="text-action" disabled={submitting} onClick={() => void restore(account)}>æ¢å¤</button>}</>}</div></div>; })}</div>}</section>{open && <div className="figma-modal-backdrop" onClick={(event) => { if (event.target === event.currentTarget && !submitting) close(); }}><div className="figma-modal model-modal"><button type="button" className="modal-close" disabled={submitting} onClick={close}><Icon name="close" size={14} /></button><h2>{editing ? "æ›´æ–°å…¬ä¼—å·å‡­è¯" : "ç»‘å®šå¾®ä¿¡å…¬ä¼—å·"}</h2><p>{editing ? "é‡æ–°å¡«å†™ AppID ä¸ AppSecret åæ‰ä¼šæ›´æ–°å‡­è¯ã€‚" : "å‡­è¯å°†åŠ å¯†ä¿å­˜ï¼›å»ºè®®å…ˆä¿ç•™â€œä»…è‰ç¨¿â€æƒé™ï¼Œç¡®è®¤æµç¨‹åå†å¼€å¯å‘å¸ƒã€‚"}</p><form onSubmit={(event) => { event.preventDefault(); void submit(); }}><label>å…¬ä¼—å·åç§°<input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="ä¾‹å¦‚ï¼šå“ç‰Œå†…å®¹å·" required /></label><label>AppID<input value={form.app_id} onChange={(event) => setForm((current) => ({ ...current, app_id: event.target.value }))} placeholder="wx..." required /></label><label>AppSecret<input type="password" value={form.app_secret} onChange={(event) => setForm((current) => ({ ...current, app_secret: event.target.value }))} placeholder="å…¬ä¼—å· AppSecret" required /></label>{!editing && <label className="form-check"><input type="checkbox" checked={form.publish_enabled} onChange={(event) => setForm((current) => ({ ...current, publish_enabled: event.target.checked }))} />å…è®¸æ­£å¼å‘å¸ƒï¼ˆä»…ç®¡ç†å‘˜ï¼‰</label>}{formError && <div className="form-error" role="alert">{formError}</div>}<div className="modal-form-actions"><PillButton type="button" onClick={close} disabled={submitting}>å–æ¶ˆ</PillButton><PillButton type="submit" tone="pink" disabled={submitting}>{submitting ? "ä¿å­˜ä¸­â€¦" : editing ? "ä¿å­˜å‡­è¯" : "ç»‘å®šå…¬ä¼—å·"}</PillButton></div></form></div></div>}</main>;
+}
+
+type UserFormPayload = { email: string; password: string; role: "admin" | "operator" | "reviewer" };
+
+function UserCenter({ users, onAdd }: { users: User[]; onAdd: (payload: UserFormPayload) => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState<UserFormPayload>({ email: "", password: "", role: "operator" });
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const close = () => { setOpen(false); setForm({ email: "", password: "", role: "operator" }); setError(""); };
+  const submit = async () => {
+    if (!form.email.trim() || form.password.length < 12) { setError("è¯·å¡«å†™æœ‰æ•ˆé‚®ç®±ï¼Œå¯†ç è‡³å°‘ 12 ä½ã€‚"); return; }
+    setSubmitting(true); setError("");
+    try { await onAdd({ ...form, email: form.email.trim() }); close(); } catch (reason) { setError(reason instanceof Error ? reason.message : "æ·»åŠ ç”¨æˆ·å¤±è´¥ã€‚"); } finally { setSubmitting(false); }
+  };
+  return <main className="figma-page model-center-page"><div className="figma-page-heading"><div><h1><span className="title-icon"><Icon name="user" size={22} /></span>ç”¨æˆ·ä¸­å¿ƒ</h1><p>ç®¡ç†å†…éƒ¨æˆå‘˜åŠå…¶è§’è‰²ï¼šç®¡ç†å‘˜å¯ç®¡ç†é…ç½®ä¸å‘å¸ƒï¼Œè¿è¥å¯å¤„ç†å†…å®¹ï¼Œå®¡æ ¸å‘˜åªå¤„ç†å®¡æ ¸æµç¨‹ã€‚</p></div><PillButton tone="pink" onClick={() => setOpen(true)}>+ æ·»åŠ ç”¨æˆ·</PillButton></div><section className="model-page-section">{!users.length ? <div className="model-empty-hint">æš‚æ— å¯ç®¡ç†ç”¨æˆ·ã€‚</div> : <div className="model-list">{users.map((user) => <div key={user.id} className="model-list-item"><div className="model-list-main"><span className="model-list-provider">{user.role}</span><strong>{user.email}</strong></div><div className="model-list-actions"><StatusPill tone={user.role === "admin" ? "green" : "blue"}>{user.role === "admin" ? "ç®¡ç†å‘˜" : user.role === "operator" ? "è¿è¥" : "å®¡æ ¸"}</StatusPill></div></div>)}</div>}</section>{open && <div className="figma-modal-backdrop" onClick={(event) => { if (event.target === event.currentTarget && !submitting) close(); }}><div className="figma-modal model-modal"><button type="button" className="modal-close" disabled={submitting} onClick={close}><Icon name="close" size={14} /></button><h2>æ·»åŠ å†…éƒ¨ç”¨æˆ·</h2><p>æ–°ç”¨æˆ·å°†ä½¿ç”¨æ­¤é‚®ç®±å’Œå¯†ç ç™»å½•åå°ã€‚</p><form onSubmit={(event) => { event.preventDefault(); void submit(); }}><label>é‚®ç®±<input type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} required /></label><label>åˆå§‹å¯†ç <input type="password" minLength={12} value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} required /></label><label>è§’è‰²<select value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value as UserFormPayload["role"] }))}><option value="operator">è¿è¥</option><option value="reviewer">å®¡æ ¸</option><option value="admin">ç®¡ç†å‘˜</option></select></label>{error && <div className="form-error" role="alert">{error}</div>}<div className="modal-form-actions"><PillButton type="button" onClick={close} disabled={submitting}>å–æ¶ˆ</PillButton><PillButton type="submit" tone="pink" disabled={submitting}>{submitting ? "æ·»åŠ ä¸­â€¦" : "æ·»åŠ ç”¨æˆ·"}</PillButton></div></form></div></div>}</main>;
+}
+function ModelCenter({ models, onAdd, onUpdate, onTest, onDelete }: { models: Model[]; onAdd: (p: ModelFormPayload) => Promise<void>; onUpdate: (id: string, p: Partial<ModelFormPayload> & { enabled?: boolean }) => Promise<void>; onTest: (id: string) => void; onDelete: (id: string) => Promise<void> }) {
+  const defaultForm = (vendor: ModelVendor = "openai"): ModelFormPayload => {
+    const catalog = MODEL_CATALOG[vendor];
+    return { provider: catalog.provider, name: catalog.models[0]?.name || "", api_base_url: catalog.apiBaseUrl, api_key: "" };
+  };
+  const [form, setForm] = useState<ModelFormPayload>(defaultForm());
+  const [vendor, setVendor] = useState<ModelVendor>("openai");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState("");
+
+  const vendorFor = (model: Model): ModelVendor => {
+    const found = (Object.keys(MODEL_CATALOG) as ModelVendor[]).find((key) => {
+      const catalog = MODEL_CATALOG[key];
+      return catalog.provider === model.provider && catalog.apiBaseUrl === (model.api_base_url || "") && catalog.models.some((item) => item.name === model.name);
+    });
+    return found || "custom";
+  };
+  const reset = () => {
+    setEditingId(null);
+    setVendor("openai");
+    setForm(defaultForm());
+    setFormError("");
+    setOpen(false);
+  };
+  const changeVendor = (next: ModelVendor) => {
+    setVendor(next);
+    setForm(defaultForm(next));
+    setFormError("");
+  };
+  const startEdit = (model: Model) => {
+    const nextVendor = vendorFor(model);
+    setEditingId(model.id);
+    setVendor(nextVendor);
+    setForm({ provider: model.provider as ModelProvider, name: model.name, api_base_url: model.api_base_url || "", api_key: "" });
+    setFormError("");
+    setOpen(true);
+  };
+  const submit = async () => {
+    const provider = form.provider.trim() as ModelProvider;
+    const name = form.name.trim();
+    const apiBaseUrl = form.api_base_url.trim();
+    if (!provider || !name) {
+      setFormError("è¯·é€‰æ‹©ä¾›åº”å•†å’Œæ¨¡å‹ï¼Œæˆ–å¡«å†™è‡ªå®šä¹‰æ¨¡å‹ IDã€‚");
+      return;
+    }
+    if (provider !== "fake" && !apiBaseUrl) {
+      setFormError("è¯·å¡«å†™è¯¥ä¾›åº”å•†çš„ API Base URLã€‚");
+      return;
+    }
+    if (apiBaseUrl) {
+      try { new URL(apiBaseUrl); } catch { setFormError("API Base URL éœ€è¦æ˜¯å®Œæ•´åœ°å€ï¼Œä¾‹å¦‚ https://api.example.com/v1ã€‚"); return; }
+    }
+    setSubmitting(true);
+    setFormError("");
+    try {
+      const payload = { ...form, provider, name, api_base_url: apiBaseUrl };
+      if (editingId) await onUpdate(editingId, payload);
+      else await onAdd(payload);
+      reset();
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "ä¿å­˜å¤±è´¥ï¼Œè¯·æ£€æŸ¥æ¥å£åœ°å€å’Œå‡­è¯åé‡è¯•ã€‚");
+    } finally { setSubmitting(false); }
+  };
+  const remove = async (model: Model) => {
+    if (!window.confirm(`æ°¸ä¹…åˆ é™¤æ¨¡å‹â€œ${model.name}â€ï¼Ÿä»…å½“æ²¡æœ‰ç­–ç•¥æˆ–æœªå®Œæˆä»»åŠ¡å¼•ç”¨å®ƒæ—¶æ‰ä¼šåˆ é™¤ï¼›å†å²æ–‡ç« å¿«ç…§ä¼šä¿ç•™ã€‚`)) return;
+    setSubmitting(true);
+    try { await onDelete(model.id); } catch { /* Mutation already reports the server message. */ } finally { setSubmitting(false); }
+  };
+  const catalog = MODEL_CATALOG[vendor];
+
+  return (
+    <main className="figma-page model-center-page">
+      <div className="figma-page-heading">
+        <div>
+          <h1><span className="title-icon"><Icon name="robot" size={22} /></span>æ¨¡å‹ä¸­å¿ƒ</h1>
+          <p>å…ˆé€‰ä¾›åº”å•†ï¼Œå†é€‰æ¨¡å‹ã€‚ç­–ç•¥åªä¼šçœ‹åˆ°å·²å¯ç”¨çš„è¿æ¥ï¼›åˆ é™¤ä¼šå…ˆæ£€æŸ¥ç”Ÿäº§çº¿ä¸æœªå®Œæˆä»»åŠ¡å¼•ç”¨ã€‚</p>
+        </div>
+        <PillButton tone="pink" onClick={() => { setEditingId(null); changeVendor("openai"); setOpen(true); }}>+ æ·»åŠ æ¨¡å‹</PillButton>
+      </div>
+      <section className="model-guidance" aria-label="æ¨¡å‹é…ç½®è¯´æ˜">
+        <strong>æ¨èæ­é…</strong><span>æ—¥å¸¸åˆ›ä½œé€‰ DeepSeek Flash æˆ– GLM-4.7 Flashï¼›æ·±åº¦å†™ä½œé€‰ DeepSeek Proã€GLM-5.2 æˆ– Claude Opusã€‚</span><span>è´¦æˆ·è‹¥å¼€æ”¾ GPT-5.6ï¼Œè¯·åœ¨â€œå…¶ä»–å…¼å®¹æ¥å£â€å¡«å†™ `gpt-5.6`ã€‚</span>
+      </section>
+      <section className="model-page-section">
+        {!models.length ? <div className="model-empty-hint">è¿˜æ²¡æœ‰é…ç½®æ¨¡å‹ã€‚æ·»åŠ ä¸€æ¡è¿æ¥åï¼Œæ‰èƒ½åœ¨è‡ªåŠ¨åŒ–ç”Ÿäº§çº¿ä¸­é€‰æ‹©å®ƒã€‚</div> : (
+          <div className="model-list">
+            {models.map((model) => <div key={model.id} className="model-list-item">
+              <div className="model-list-main">
+                <span className="model-list-provider">{MODEL_CATALOG[vendorFor(model)].label}</span>
+                <strong>{model.name}</strong>
+                <span className={model.has_api_key ? "model-list-key" : "model-list-key miss"}><Icon name={model.has_api_key ? "check" : "close"} size={10} />{model.has_api_key ? "å·²é…ç½®å‡­è¯" : "æœªé…ç½®å‡­è¯"}</span>
+              </div>
+              <div className="model-list-actions">
+                <StatusPill tone={model.enabled ? "green" : "neutral"}>{model.enabled ? "å¯ç”¨ä¸­" : "å·²åœç”¨"}</StatusPill>
+                <button type="button" className="text-action" disabled={submitting} onClick={() => void onUpdate(model.id, { enabled: !model.enabled })}>{model.enabled ? "åœç”¨" : "å¯ç”¨"}</button>
+                <button type="button" className="text-action" disabled={submitting} onClick={() => onTest(model.id)}>æµ‹è¯•</button>
+                <button type="button" className="text-action" disabled={submitting} onClick={() => startEdit(model)}>ç¼–è¾‘</button>
+                <button type="button" className="text-action text-action--danger" disabled={submitting} onClick={() => void remove(model)}>åˆ é™¤</button>
+              </div>
+            </div>)}
+          </div>
+        )}
+      </section>
+      {open && <div className="figma-modal-backdrop" onClick={(event) => { if (event.target === event.currentTarget && !submitting) reset(); }}>
+        <div className="figma-modal model-modal">
+          <button type="button" className="modal-close" disabled={submitting} onClick={reset}><Icon name="close" size={14} /></button>
+          <h2>{editingId ? "ç¼–è¾‘æ¨¡å‹è¿æ¥" : "æ·»åŠ æ¨¡å‹è¿æ¥"}</h2>
+          <p>å¯†é’¥åªåœ¨ä½ ä¿å­˜æ—¶å‘é€ï¼Œç¼–è¾‘æ—¶ç•™ç©ºåˆ™ä¸è¦†ç›–å·²æœ‰å¯†é’¥ã€‚</p>
+          <form onSubmit={(event) => { event.preventDefault(); void submit(); }}>
+            <label>ä¾›åº”å•†<select value={vendor} onChange={(event) => changeVendor(event.target.value as ModelVendor)}>{MODEL_VENDOR_OPTIONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
+            {catalog.models.length ? <label>æ¨¡å‹<select value={catalog.models.some((item) => item.name === form.name) ? form.name : "custom"} onChange={(event) => { const name = event.target.value; setForm((current) => ({ ...current, name: name === "custom" ? "" : name })); }}><option value="">è¯·é€‰æ‹©æ¨¡å‹</option>{catalog.models.map((item) => <option key={item.name} value={item.name}>{item.label}</option>)}<option value="custom">è‡ªå®šä¹‰æ¨¡å‹ ID</option></select></label> : null}
+            <label>æ¨¡å‹ ID<input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder={vendor === "openai" ? "ä¾‹å¦‚ gpt-5.6ï¼ˆæŒ‰è´¦æˆ·å¼€æ”¾ï¼‰" : "å¡«å†™æœåŠ¡å•†ç»™å‡ºçš„æ¨¡å‹ ID"} required /></label>
+            <label>API Base URL<input value={form.api_base_url} disabled={vendor === "fake"} onChange={(event) => setForm((current) => ({ ...current, api_base_url: event.target.value }))} placeholder="https://api.example.com/v1" /></label>
+            <label>API Key<input type="password" value={form.api_key} onChange={(event) => setForm((current) => ({ ...current, api_key: event.target.value }))} placeholder={editingId ? "ç•™ç©ºè¡¨ç¤ºä¸ä¿®æ”¹" : "sk-..."} /></label>
+            {formError && <div className="form-error" role="alert">{formError}</div>}
+            <div className="modal-form-actions"><PillButton type="button" onClick={reset} disabled={submitting}>å–æ¶ˆ</PillButton><PillButton type="submit" tone="pink" disabled={submitting || !form.name.trim()}>{submitting ? "ä¿å­˜ä¸­â€¦" : editingId ? "ä¿å­˜ä¿®æ”¹" : "æ·»åŠ æ¨¡å‹"}</PillButton></div>
+          </form>
+        </div>
+      </div>}
+    </main>
+  );
+}
+type StrategySavePayload = { name: string; objective: string; schedule: string; automation_level: string; enabled: boolean; config: Strategy["config"] };
+
+function StrategyList({ strategies, selectedId, onSelect, onNew, onRun, models, skills, themes }: { strategies: Strategy[]; selectedId: string | null; onSelect: (id: string) => void; onNew: () => void; onRun: (id: string) => void; models: Model[]; skills: Skill[]; themes: Theme[] }) {
+  const modelMap = new Map(models.map(m => [m.id, m]));
+  const skillMap = new Map(skills.map(s => [s.id, s]));
+  const themeMap = new Map(themes.map(t => [t.id, t]));
+  return (
+    <aside className="strategy-list-panel">
+      <div className="strategy-list-head">
+        <h2>æˆ‘çš„ç­–ç•¥ <small>({strategies.length})</small></h2>
+        <button type="button" className="figma-link-button" onClick={onNew}>+ æ–°å»º</button>
+      </div>
+      <div className="strategy-list-items">
+        {strategies.map(s => {
+          const modelByStage = (s.config.model_by_stage || {}) as Record<string, string>;
+          const skillId = s.config.skill_ids?.[0];
+          const mid = modelByStage.writing;
+          const tid = s.config.theme_id;
+          const sk = skillId ? skillMap.get(skillId) : undefined;
+          const m = mid ? modelMap.get(mid) : undefined;
+          const t = tid ? themeMap.get(tid) : undefined;
+          return (
+            <button key={s.id} type="button" className={`strategy-list-item ${s.id === selectedId ? "is-selected" : ""}`} onClick={() => onSelect(s.id)}>
+              <div className="strategy-item-top">
+                <strong>{s.name}</strong>
+                <span className={`strategy-dot ${s.enabled ? "dot-on" : "dot-off"}`} />
+              </div>
+              <div className="strategy-item-chain">
+                <span>{sk?.name || "â€”"}</span><i>â†’</i><span>{m ? `${m.provider}/${m.name}` : "â€”"}</span><i>â†’</i><span>{t?.name || "â€”"}</span>
+              </div>
+              <small className="strategy-item-meta">{s.automation_level} Â· {s.schedule === "manual" ? "æ‰‹åŠ¨" : s.schedule === "hourly" ? "æ¯å°æ—¶" : "æ¯å¤©"}</small>
+              {s.id === selectedId && <button className="strategy-run-btn" type="button" onClick={(e) => { e.stopPropagation(); onRun(s.id); }}><Icon name="play" size={12} />è¿è¡Œ</button>}
+            </button>
+          );
+        })}
+        {!strategies.length && <div className="strategy-empty-hint">è¿˜æ²¡æœ‰ç­–ç•¥ç»„åˆï¼Œç‚¹å‡»ä¸Šæ–¹ã€Œ+ æ–°å»ºã€åˆ›å»ºã€‚</div>}
+      </div>
+    </aside>
+  );
+}
+
+function Strategy({ strategies, selectedId, onSelect, onNew, sources, skills, themes, models, selectedMaterial, onSave, onRun, onAddSource, onImportSkill, onPublishSkill }: { strategies: Strategy[]; selectedId: string | null; onSelect: (id: string) => void; onNew: () => void; sources: Source[]; skills: Skill[]; themes: Theme[]; models: Model[]; selectedMaterial?: Material; onSave: (id: string | undefined, payload: StrategySavePayload) => void; onRun: (id: string) => void; onAddSource: () => void; onImportSkill: (file: File) => void; onPublishSkill: (id: string) => void }) {
+  const current = strategies.find(s => s.id === selectedId) ?? null;
+  const modelByStage = (current?.config.model_by_stage || {}) as Record<string, string>;
+  const [name, setName] = useState(current?.name || "");
+  const [objective, setObjective] = useState(current?.objective || "");
+  const [schedule, setSchedule] = useState(current?.schedule || "manual");
+  const [autoLevel, setAutoLevel] = useState(current?.automation_level || "L2");
+  const [enabled, setEnabled] = useState(current?.enabled ?? true);
+  const [sourceMode, setSourceMode] = useState(String(current?.config.source_mode || "internal"));
+  const [skill, setSkill] = useState(current?.config.skill_ids?.[0] || skills[0]?.id || "");
+  const [model, setModel] = useState(modelByStage.writing || models[0]?.id || "");
+  const [humanization, setHumanization] = useState(Number(current?.config.humanization || 75));
+  const [theme, setTheme] = useState(current?.config.theme_id || themes[0]?.id || "");
+
+  useEffect(() => {
+    setName(current?.name || "");
+    setObjective(current?.objective || "");
+    setSchedule(current?.schedule || "manual");
+    setAutoLevel(current?.automation_level || "L2");
+    setEnabled(current?.enabled ?? true);
+    setSourceMode(String(current?.config.source_mode || "internal"));
+    setSkill(current?.config.skill_ids?.[0] || skills[0]?.id || "");
+    setModel(((current?.config.model_by_stage || {}) as Record<string, string>).writing || models[0]?.id || "");
+    setHumanization(Number(current?.config.humanization || 75));
+    setTheme(current?.config.theme_id || themes[0]?.id || "");
+  }, [selectedId]);
+
+  useEffect(() => { if (!skill && skills[0]) setSkill(skills[0].id); }, [skill, skills]);
+  useEffect(() => { if (!model && models[0]) setModel(models[0].id); }, [model, models]);
+  useEffect(() => { if (!theme && themes[0]) setTheme(themes[0].id); }, [theme, themes]);
+
+  const chosenSkill = skills.find((item) => item.id === skill);
+  const chosenModel = models.find((item) => item.id === model);
+  const chosenTheme = themes.find((item) => item.id === theme);
+  const chosenTokens = (chosenTheme?.tokens || {}) as Record<string, string>;
+  const enabledModels = models.filter(m => m.enabled);
+  const save = () => onSave(current?.id, { name: name || "æœªå‘½åç­–ç•¥", objective: objective || "å›´ç»•çƒ­ç‚¹ä¸ç”¨æˆ·åœºæ™¯ç”Ÿæˆé«˜è´¨é‡å…¬ä¼—å·å†…å®¹", schedule, automation_level: autoLevel, enabled, config: { ...(current?.config || {}), source_ids: sourceMode === "internal" ? sources.map((item) => item.id) : [], material_ids: selectedMaterial ? [selectedMaterial.id] : [], skill_ids: skill ? [skill] : [], model_by_stage: { writing: model }, theme_id: theme, humanization, source_mode: sourceMode } });
+
+  if (!current && strategies.length > 0) return null;
+
+  return <main className="figma-page strategy-page"><div className="figma-page-heading strategy-heading"><div><h1><span className="title-icon"><Icon name="settings" size={22} /></span>ç­–ç•¥ç»„åˆ</h1><p>ç®¡ç†ä½ çš„å¤šå¥—å†…å®¹ç”Ÿäº§æµæ°´çº¿ï¼Œæ¯å¥—å¯ç‹¬ç«‹é…ç½®å¹¶éšæ—¶åˆ‡æ¢æ‰§è¡Œã€‚</p></div><div className="heading-actions"><button type="button" className="strategy-source-link" onClick={onAddSource}><Icon name="link" size={16} />ä¿¡æ¯æº <span>{sources.length}</span></button></div></div><section className="strategy-layout-v2"><StrategyList strategies={strategies} selectedId={selectedId} onSelect={onSelect} onNew={onNew} onRun={onRun} models={models} skills={skills} themes={themes} /><div className="strategy-detail-area">{current ? <div className="strategy-controls"><section className="strategy-section strategy-meta-section"><div className="strategy-meta-grid"><label className="strategy-meta-field"><small>ç­–ç•¥åç§°</small><input value={name} onChange={e => setName(e.target.value)} placeholder="ä¾‹å¦‚ï¼šç§‘æŠ€å¿«è®¯æ—¥æ›´ç­–ç•¥" /></label><label className="strategy-meta-field"><small>å†…å®¹ç›®æ ‡</small><input value={objective} onChange={e => setObjective(e.target.value)} placeholder="å›´ç»•çƒ­ç‚¹ä¸ç”¨æˆ·åœºæ™¯ç”Ÿæˆé«˜è´¨é‡å†…å®¹" /></label><label className="strategy-meta-field"><small>è¿è¡Œé¢‘ç‡</small><select value={schedule} onChange={e => setSchedule(e.target.value)}><option value="manual">æ‰‹åŠ¨æ‰§è¡Œ</option><option value="hourly">æ¯å°æ—¶</option><option value="daily">æ¯å¤©</option></select></label><label className="strategy-meta-field"><small>è‡ªåŠ¨åŒ–ç­‰çº§</small><select value={autoLevel} onChange={e => setAutoLevel(e.target.value)}><option value="L1">L1</option><option value="L2">L2</option><option value="L3">L3</option><option value="L4">L4</option></select></label></div><label className="strategy-enabled-toggle"><input type="checkbox" checked={enabled} onChange={e => setEnabled(e.target.checked)} /> å¯ç”¨è‡ªåŠ¨è°ƒåº¦</label></section><section className="strategy-section"><div className="strategy-section-title"><span className="circle-icon circle-icon--cyan"><Icon name="database" size={18} /></span><div><h2>é€‰æ‹©ç´ ææº</h2><p>å†³å®š AI ä»å“ªé‡Œå¼€å§‹å¯»æ‰¾çµæ„Ÿ</p></div></div><div className="source-choice-grid"><button type="button" className={sourceMode === "internal" ? "is-selected" : ""} onClick={() => setSourceMode("internal")}><strong>å†…éƒ¨ç´ æåº“</strong><span>ä»æ‚¨å·²ä¿å­˜çš„æ–‡ç« å’Œæ”¶é›†ä¸­æå–çµæ„Ÿã€‚</span>{selectedMaterial && <small className="selected-material-note">å·²é€‰ï¼š{shortText(selectedMaterial.title, 34)}</small>}</button><button type="button" className={sourceMode === "realtime" ? "is-selected" : ""} onClick={() => setSourceMode("realtime")}><strong>å…¨ç½‘å®æ—¶æœç´¢</strong><span>æŠ“å–æœ€æ–°çƒ­ç‚¹å’Œèµ„è®¯ä½œä¸ºåˆ›ä½œåŸºåº•ã€‚</span></button></div></section><section className="strategy-section"><div className="strategy-section-title"><span className="circle-icon circle-icon--pink"><Icon name="magic" size={18} /></span><div><h2>é€‰æ‹©å†™ä½œ Skill</h2><p>é€‰æ‹©å·²å‘å¸ƒçš„å†™ä½œæŠ€èƒ½åŒ…</p></div></div><div className="skill-module-grid">{skills.map((item) => <button type="button" key={item.id} className={`skill-module ${skill === item.id ? "is-selected" : ""} ${item.status !== "published" ? "is-draft" : ""}`} aria-disabled={item.status !== "published"} onClick={() => { if (item.status === "published") setSkill(item.id); }}><span className="skill-module-icon"><Icon name="magic" size={16} /></span><span><strong>{item.name}</strong><small>{item.skill_type} Â· v{item.version}</small></span><em className={item.status === "published" ? "" : "skill-publish-control"} onClick={(event) => { if (item.status !== "published") { event.stopPropagation(); onPublishSkill(item.id); } }}>{item.status === "published" ? "å¯ç”¨" : "å‘å¸ƒ"}</em></button>)}{!skills.length && <div className="skill-empty">è¿˜æ²¡æœ‰å·²å‘å¸ƒ Skillã€‚</div>}</div></section><section className="strategy-section"><div className="strategy-section-title"><span className="circle-icon circle-icon--purple"><Icon name="robot" size={18} /></span><div><h2>é€‰æ‹©å†™ä½œæ¨¡å‹</h2><p>é€‰æ‹©é©±åŠ¨ AI ç”Ÿæˆå†…å®¹çš„å¤§è¯­è¨€æ¨¡å‹</p></div></div><div className="model-select-grid">{enabledModels.length ? enabledModels.map((item) => <button type="button" key={item.id} className={`model-card ${model === item.id ? "is-selected" : ""}`} onClick={() => setModel(item.id)}><span className="model-card-provider">{item.provider}</span><strong>{item.name}</strong><em>{model === item.id ? "âœ“" : ""}</em></button>) : <div className="skill-empty">è¿˜æ²¡æœ‰å·²å¯ç”¨çš„æ¨¡å‹ï¼Œè¯·åœ¨ã€Œæ¨¡å‹ä¸­å¿ƒã€æ ‡ç­¾é¡µä¸­æ·»åŠ ã€‚</div>}</div></section><section className="strategy-section"><div className="strategy-section-title"><span className="circle-icon circle-icon--cyan"><Icon name="image" size={18} /></span><div><h2>é€‰æ‹©æ’ç‰ˆæ¨¡æ¿</h2><p>æ¯å¼ å¡ç‰‡å±•ç¤ºçœŸå®ä¸»é¢˜é…è‰²å’Œæ–‡ç« ç»“æ„</p></div></div><div className="template-grid">{themes.filter((item) => item.enabled).map((item) => { const tokens = item.tokens as Record<string, string>; return <button type="button" key={item.id} className={theme === item.id ? "is-selected" : ""} onClick={() => setTheme(item.id)}><span className="theme-preview" style={{ background: tokens.surface || "#fff", color: tokens.text || "#222", borderColor: tokens.accent || "#e040a0" }}><i style={{ background: tokens.accent || "#e040a0" }} /><i style={{ background: tokens.muted || "#b7a8b8" }} /><b style={{ background: tokens.accent || "#e040a0" }} /><small style={{ background: tokens.muted || "#b7a8b8" }} /></span><strong>{item.name}</strong><small className="template-description">{shortText(item.description, 28)}</small>{theme === item.id && <em>âœ“</em>}</button>; })}{!themes.length && <div className="skill-empty">è¿˜æ²¡æœ‰å¯ç”¨æ’ç‰ˆæ¨¡æ¿ã€‚</div>}</div></section><section className="strategy-section"><div className="strategy-section-title"><span className="circle-icon circle-icon--pink"><Icon name="spark" size={18} /></span><div><h2>å» AI å‘³é“è°ƒèŠ‚</h2><p>æ§åˆ¶æ–‡é£çš„è‡ªç„¶ç¨‹åº¦</p></div></div><div className="humanization-label"><span>æ›´åƒ AI</span><strong>{humanization}%</strong><span>æ›´åƒäººç±»</span></div><input className="figma-range" type="range" min="0" max="100" value={humanization} onChange={(event) => setHumanization(Number(event.target.value))} /></section><div className="strategy-save-bar"><PillButton onClick={save}>ä¿å­˜ç­–ç•¥ç»„åˆ</PillButton><PillButton tone="pink" onClick={() => { save(); if (current) onRun(current.id); }}>ä¿å­˜å¹¶ç«‹å³æ‰§è¡Œ <Icon name="chevron" size={15} /></PillButton></div></div> : <div className="strategy-detail-empty"><div className="figma-empty"><Icon name="settings" size={28} /><strong>é€‰æ‹©ä¸€ä¸ªç­–ç•¥æˆ–æ–°å»ºç­–ç•¥</strong><span>ä»å·¦ä¾§åˆ—è¡¨é€‰æ‹©å·²æœ‰ç­–ç•¥è¿›è¡Œç¼–è¾‘ï¼Œæˆ–ç‚¹å‡»ã€Œ+ æ–°å»ºã€åˆ›å»ºä¸€å¥—æ–°çš„å†…å®¹ç”Ÿäº§ç»„åˆã€‚</span></div><PillButton tone="pink" onClick={onNew}><Icon name="edit" size={14} />æ–°å»ºç­–ç•¥ç»„åˆ</PillButton></div>}</div></section></main>;
+}
+
+export function FigmaConsole({ currentUser }: { currentUser: User }) {
+  const queryClient = useQueryClient();
+  const [page, setPage] = useState<Page>("dashboard");
+  const [editorReturnPage, setEditorReturnPage] = useState<"review" | "library">("review");
+  const [selectedMaterialId, setSelectedMaterialId] = useState<string | null>(null);
+  const [selectedArticleId, setSelectedArticleId] = useState<string | null>(null);
+  const [sourceOpen, setSourceOpen] = useState(false);
+  const [sourceType, setSourceType] = useState<"rss" | "url" | "manual" | "aihot_api">("rss");
+  const [topicOpen, setTopicOpen] = useState(false);
+  const [topicTitle, setTopicTitle] = useState("");
+  const [topicStrategyId, setTopicStrategyId] = useState("");
+  const [selectedChannelId, setSelectedChannelId] = useState("");
+  const [selectedThemeId, setSelectedThemeId] = useState("");
+  const [selectedSkillId, setSelectedSkillId] = useState("");
+  const [thumbMediaId, setThumbMediaId] = useState("");
+  const [coverPreviewUrl, setCoverPreviewUrl] = useState("");
+  const [deliveryError, setDeliveryError] = useState("");
+  const [curationResult, setCurationResult] = useState<{ candidate_count: number; selected_count: number; selected_ids: string[]; selected_titles: string[]; message: string } | null>(null);
+  const [settingsTab, setSettingsTab] = useState<"strategy" | "sources" | "models" | "channels" | "users">("strategy");
+  const [selectedStrategyId, setSelectedStrategyId] = useState<string | null>(null);
+  const [creatingStrategy, setCreatingStrategy] = useState(false);
+  const sources = useQuery({ queryKey: ["sources"], queryFn: api.sources });
+  const materials = useQuery({ queryKey: ["materials"], queryFn: () => api.materials(), refetchInterval: 10000 });
+  const materialCategories = useQuery({ queryKey: ["material-categories"], queryFn: () => api.materialCategories(true) });
+  const topics = useQuery({ queryKey: ["topics"], queryFn: api.topics, refetchInterval: 8000 });
+  const articles = useQuery({ queryKey: ["articles"], queryFn: api.articles, refetchInterval: 8000 });
+  const strategies = useQuery({ queryKey: ["strategies"], queryFn: api.strategies });
+  const topicAlgorithms = useQuery({ queryKey: ["topic-algorithms"], queryFn: api.topicAlgorithms });
+  const skills = useQuery({ queryKey: ["skills"], queryFn: api.skills });
+  const themes = useQuery({ queryKey: ["themes"], queryFn: api.themes });
+  const channels = useQuery({ queryKey: ["channel-accounts"], queryFn: api.channelAccounts });
+  const users = useQuery({ queryKey: ["users"], queryFn: api.users, enabled: currentUser.role === "admin" });
+  const models = useQuery({ queryKey: ["models"], queryFn: api.models });
+  const jobs = useQuery({ queryKey: ["jobs"], queryFn: api.jobs, refetchInterval: 5000 });
+  const dashboard = useQuery({ queryKey: ["dashboard"], queryFn: api.dashboard });
+  useEffect(() => { if (!selectedChannelId && channels.data?.[0]) setSelectedChannelId(channels.data[0].id); }, [channels.data, selectedChannelId]);
+  useEffect(() => { if (!selectedThemeId && themes.data?.[0]) setSelectedThemeId(themes.data[0].id); }, [selectedThemeId, themes.data]);
+  useEffect(() => { if (!selectedSkillId && skills.data?.[0]) setSelectedSkillId(skills.data[0].id); }, [selectedSkillId, skills.data]);
+  useEffect(() => { if (!creatingStrategy && !selectedStrategyId && strategies.data?.[0]) setSelectedStrategyId(strategies.data[0].id); }, [creatingStrategy, selectedStrategyId, strategies.data]);
+  const refresh = (...keys: string[]) => Promise.all(keys.map((key) => queryClient.invalidateQueries({ queryKey: [key] })));
+  const triage = useMutation({ mutationFn: ({ id, decision }: { id: string; decision: "save" | "ignore" | "reopen" }) => api.triageMaterial(id, decision), onSuccess: () => void refresh("materials"), onError: (error: Error) => message.error(error.message) });
+  const collectSources = useMutation({ mutationFn: async (ids: string[]) => { const results = await Promise.all(ids.map((id) => api.collectSource(id))); return results.reduce((total, result) => ({ count: total.count + result.count, classified: total.classified + result.classified_count, failed: total.failed + result.classification_failed_count }), { count: 0, classified: 0, failed: 0 }); }, onSuccess: (result) => { message.success(`é‡‡é›†å®Œæˆï¼šç´ æ ${result.count} æ¡ï¼ŒAI å·²åˆ†ç±» ${result.classified} æ¡${result.failed ? `ï¼Œ${result.failed} æ¡åˆ†ç±»å¾…é‡è¯•` : ""}`); void refresh("sources", "materials", "material-categories", "dashboard"); }, onError: (error: Error) => message.error(`é‡‡é›†å¤±è´¥ï¼š${error.message}`) });
+  const curateMaterials = useMutation({ mutationFn: (strategyId: string) => api.curateMaterials({ strategy_id: strategyId, limit: 12 }), onSuccess: (result) => { setCurationResult(result); message.success(result.message); void refresh("materials", "dashboard"); }, onError: (error: Error) => message.error(`AI ç²¾é€‰å¤±è´¥ï¼š${error.message}`) });
+  const classifyMaterials = useMutation({ mutationFn: (ids?: string[]) => api.classifyMaterials({ material_ids: ids || [], retry_failed: true }), onSuccess: (result) => { message.success(result.message); void refresh("materials", "material-categories"); }, onError: (error: Error) => message.error(`AI åˆ†ç±»å¤±è´¥ï¼š${error.message}`) });
+  const assignMaterialCategory = useMutation({ mutationFn: ({ id, categoryId }: { id: string; categoryId: string | null }) => api.assignMaterialCategory(id, categoryId), onSuccess: () => void refresh("materials", "material-categories"), onError: (error: Error) => message.error(error.message) });
+  const addMaterialCategory = useMutation({ mutationFn: (payload: { name: string; description?: string; classification_instructions?: string }) => api.addMaterialCategory(payload), onSuccess: () => { message.success("ç´ æåˆ†ç±»å·²æ·»åŠ "); void refresh("material-categories"); }, onError: (error: Error) => message.error(error.message) });
+  const updateMaterialCategory = useMutation({ mutationFn: ({ id, payload }: { id: string; payload: Partial<Pick<MaterialCategory, "name" | "description" | "classification_instructions" | "enabled">> }) => api.updateMaterialCategory(id, payload), onSuccess: () => { message.success("ç´ æåˆ†ç±»å·²æ›´æ–°"); void refresh("material-categories", "materials"); }, onError: (error: Error) => message.error(error.message) });
+  const disableMaterialCategory = useMutation({ mutationFn: api.disableMaterialCategory, onSuccess: () => { message.success("ç´ æåˆ†ç±»å·²åœç”¨ï¼Œå†å²ç´ æä»ç„¶ä¿ç•™"); void refresh("material-categories"); }, onError: (error: Error) => message.error(error.message) });
+  const restoreMaterialCategory = useMutation({ mutationFn: api.restoreMaterialCategory, onSuccess: () => { message.success("ç´ æåˆ†ç±»å·²æ¢å¤"); void refresh("material-categories"); }, onError: (error: Error) => message.error(error.message) });
+  const createFromMaterials = useMutation({
+    mutationFn: async (payload: { materialIds: string[]; strategyId: string; title?: string; skillId: string }) => {
+      const topic = await api.createTopicFromMaterials({
+        material_ids: payload.materialIds,
+        strategy_id: payload.strategyId,
+        title: payload.title,
+      });
+      await api.decideTopic(topic.id, "accept");
+      const startPayload: { writing_skill_id?: string; disable_writing_skill?: boolean } = {};
+      if (payload.skillId === "none") startPayload.disable_writing_skill = true;
+      else if (payload.skillId) startPayload.writing_skill_id = payload.skillId;
+      return api.startTopicWriting(topic.id, startPayload);
+    },
+    onSuccess: () => {
+      message.success("åˆ›ä½œä»»åŠ¡å·²å¯åŠ¨ï¼Œå®Œæˆåä¼šè¿›å…¥å¾…å®¡æ ¸");
+      void refresh("materials", "topics", "jobs", "articles");
+      setPage("review");
+    },
+    onError: (error: Error) => message.error(error.message),
+  });
+  const scanTopics = useMutation({
+    mutationFn: ({ strategyId, algorithmId }: { strategyId: string; algorithmId: string }) => api.scanStrategy(strategyId, algorithmId),
+    onSuccess: () => {
+      message.success("æ‰«æä»»åŠ¡å·²å¯åŠ¨ï¼ŒAI æ­£åœ¨åˆ†æç´ æå¹¶æ¨èé€‰é¢˜");
+      void refresh("jobs", "topics", "materials");
+    },
+    onError: (error: Error) => message.error(error.message),
+  });
+  const saveTopicMaterials = useMutation({
+    mutationFn: (topic: Topic) => Promise.all(topic.materials.map((material) => api.triageMaterial(material.source_item_id, "save"))),
+    onSuccess: () => { void refresh("materials"); message.success("å…³è”ç´ æå·²ä¿ç•™åˆ°ç´ ææ± "); },
+    onError: (error: Error) => message.error(error.message),
+  });
+  const acceptTopic = useMutation({ mutationFn: async (topic: Topic) => { if (topic.status === "candidate") await api.decideTopic(topic.id, "accept"); return api.startTopicWriting(topic.id); }, onSuccess: () => { message.success("å†™ä½œä»»åŠ¡å·²è¿›å…¥åå°ï¼Œç”Ÿæˆå®Œæˆåä¼šå‡ºç°åœ¨å¾…å®¡æ ¸"); void refresh("topics", "jobs", "articles"); }, onError: (error: Error) => message.error(error.message) });
+  const createTopic = useMutation({ mutationFn: () => api.addTopic({ title: topicTitle, strategy_id: topicStrategyId, rationale: "ç”±è¿è¥äººå‘˜æ‰‹åŠ¨åˆ›å»º" }), onSuccess: () => { setTopicOpen(false); setTopicTitle(""); void refresh("topics"); message.success("é€‰é¢˜å·²åˆ›å»º"); }, onError: (error: Error) => message.error(error.message) });
+  const addSource = useMutation({ mutationFn: (payload: { name: string; source_type: "rss" | "url" | "aihot_api"; url?: string; category?: string }) => api.addSource({ name: payload.name, source_type: payload.source_type, url: payload.url || "", config: payload.category ? { category: payload.category } : {} }), onSuccess: () => { setSourceOpen(false); void refresh("sources", "dashboard"); message.success("ä¿¡æ¯æºå·²æ·»åŠ "); }, onError: (error: Error) => message.error(error.message) });
+  const addRecommendedSource = useMutation({ mutationFn: (source: RecommendedSource) => api.addSource({ name: source.name, source_type: source.source_type, url: source.url }), onSuccess: () => { void refresh("sources", "dashboard"); message.success("æ¨èä¿¡æ¯æºå·²æ·»åŠ "); }, onError: (error: Error) => message.error(error.message) });  const addManualMaterial = useMutation({ mutationFn: (payload: { title: string; content: string; source_name?: string }) => api.addManualMaterial(payload), onSuccess: () => { setSourceOpen(false); void refresh("sources", "materials", "dashboard"); message.success("æ‰‹åŠ¨ç´ æå·²åŠ å…¥ç´ ææ± "); }, onError: (error: Error) => message.error(error.message) });
+  const createTopicAlgorithm = useMutation({ mutationFn: api.addTopicAlgorithm, onSuccess: () => { void refresh("topic-algorithms"); message.success("é€‰é¢˜ç®—æ³•å·²åˆ›å»º"); }, onError: (error: Error) => message.error(error.message) });
+  const updateTopicAlgorithm = useMutation({ mutationFn: ({ id, payload }: { id: string; payload: Parameters<typeof api.updateTopicAlgorithm>[1] }) => api.updateTopicAlgorithm(id, payload), onSuccess: () => { void refresh("topic-algorithms"); message.success("é€‰é¢˜ç®—æ³•å·²ä¿å­˜"); }, onError: (error: Error) => message.error(error.message) });
+  const deleteTopicAlgorithm = useMutation({ mutationFn: api.deleteTopicAlgorithm, onSuccess: () => { void refresh("topic-algorithms"); message.success("é€‰é¢˜ç®—æ³•å·²åˆ é™¤"); }, onError: (error: Error) => message.error(error.message) });
+  const collectSource = useMutation({ mutationFn: api.collectSource, onSuccess: (result) => { message.success("å·²é‡‡é›† " + result.count + " æ¡ç´ æ"); void refresh("sources", "materials"); }, onError: (error: Error) => message.error(error.message) });
+  const updateSource = useMutation({ mutationFn: ({ id, source }: { id: string; source: Source }) => api.updateSource(id, source), onSuccess: () => { message.success("ä¿¡æ¯æºå·²æ›´æ–°"); void refresh("sources", "dashboard"); }, onError: (error: Error) => message.error(error.message) });
+  const disableSource = useMutation({ mutationFn: api.disableSource, onSuccess: () => { message.success("ä¿¡æ¯æºå·²åœç”¨"); void refresh("sources", "dashboard"); }, onError: (error: Error) => message.error(error.message) });
+  const importSkill = useMutation({ mutationFn: api.importSkill, onSuccess: () => { void refresh("skills"); message.success("Skill å¯¼å…¥æˆåŠŸï¼Œè¯·åœ¨å·²å‘å¸ƒåˆ—è¡¨ä¸­é€‰æ‹©"); }, onError: (error: Error) => message.error(error.message) });
+  const publishSkill = useMutation({ mutationFn: api.publishSkill, onSuccess: () => { void refresh("skills"); message.success("Skill å·²å‘å¸ƒï¼Œç°åœ¨å¯ä»¥åˆ‡æ¢ä½¿ç”¨"); }, onError: (error: Error) => message.error(error.message) });
+  const addModel = useMutation({ mutationFn: (p: ModelFormPayload) => api.addModel({ provider: p.provider, name: p.name, api_base_url: p.api_base_url || undefined, api_key: p.api_key || undefined }), onSuccess: () => { void refresh("models"); message.success("æ¨¡å‹å·²æ·»åŠ "); }, onError: (error: Error) => message.error(error.message) });
+  const updateModel = useMutation({ mutationFn: ({ id, p }: { id: string; p: Partial<ModelFormPayload> & { enabled?: boolean } }) => api.updateModel(id, { provider: p.provider, name: p.name, api_base_url: p.api_base_url, api_key: p.api_key || undefined, enabled: p.enabled }), onSuccess: () => { void refresh("models"); message.success("æ¨¡å‹å·²æ›´æ–°"); }, onError: (error: Error) => message.error(error.message) });
+  const testModel = useMutation({ mutationFn: api.testModel, onSuccess: (result) => result.ok ? message.success(result.message) : message.warning(result.message), onError: (error: Error) => message.error(error.message) });
+  const deleteModel = useMutation({ mutationFn: api.deleteModel, onSuccess: () => { void refresh("models", "strategies"); message.success("æ¨¡å‹å·²åˆ é™¤"); }, onError: (error: Error) => message.error(error.message) });
+  const addChannel = useMutation({ mutationFn: api.addChannelAccount, onSuccess: () => { void refresh("channel-accounts"); message.success("å…¬ä¼—å·å·²ç»‘å®š"); }, onError: (error: Error) => message.error(error.message) });
+  const updateChannel = useMutation({ mutationFn: ({ id, payload }: { id: string; payload: Parameters<typeof api.updateChannelAccount>[1] }) => api.updateChannelAccount(id, payload), onSuccess: () => { void refresh("channel-accounts"); message.success("å…¬ä¼—å·è´¦å·å·²æ›´æ–°"); }, onError: (error: Error) => message.error(error.message) });
+  const testChannel = useMutation({ mutationFn: api.testChannelAccount, onSuccess: (result) => result.connected ? message.success(result.message) : message.warning(result.message), onError: (error: Error) => message.error(error.message) });
+  const disableChannel = useMutation({ mutationFn: api.disableChannelAccount, onSuccess: () => { void refresh("channel-accounts"); message.success("å…¬ä¼—å·è´¦å·å·²åœç”¨"); }, onError: (error: Error) => message.error(error.message) });
+  const addUser = useMutation({ mutationFn: api.addUser, onSuccess: () => { void refresh("users"); message.success("ç”¨æˆ·å·²æ·»åŠ "); }, onError: (error: Error) => message.error(error.message) });  const saveStrategy = useMutation({ mutationFn: ({ id, payload }: { id?: string; payload: StrategySavePayload }) => id ? api.updateStrategy(id, { name: payload.name, objective: payload.objective, schedule: payload.schedule, automation_level: payload.automation_level, enabled: payload.enabled, config: payload.config }) : api.addStrategy({ name: payload.name, objective: payload.objective, schedule: payload.schedule, automation_level: payload.automation_level, enabled: payload.enabled, config: payload.config }), onSuccess: (result) => { void refresh("strategies"); setSelectedStrategyId(result.id); setCreatingStrategy(false); message.success("ç­–ç•¥å·²ä¿å­˜"); }, onError: (error: Error) => message.error(error.message) });
+  const runStrategy = useMutation({ mutationFn: ({ id, combinationId }: { id: string; combinationId?: string }) => api.runStrategy(id, combinationId), onSuccess: () => { message.success("è‡ªåŠ¨åŒ–ä»»åŠ¡å·²å¯åŠ¨ï¼šå°†è‡ªåŠ¨é‡‡é›†ã€åˆ†ç±»ã€ç²¾é€‰ã€é€‰é¢˜ã€å†™ä½œã€å®¡æ ¸å¹¶æŒ‰äº¤ä»˜æ¨¡å¼å¤„ç†"); void refresh("jobs", "articles", "materials", "topics"); }, onError: (error: Error) => message.error(error.message) });
+  const retryJob = useMutation({ mutationFn: api.retryJob, onSuccess: () => { message.success("ä»»åŠ¡å·²é‡æ–°è¿›å…¥é˜Ÿåˆ—"); void refresh("jobs", "articles"); }, onError: (error: Error) => message.error(error.message) });
+  const reviewArticle = useMutation({
+    mutationFn: ({ article, decision }: { article: Article; decision: "approve" | "request_changes" }) => {
+      const revision = article.revisions[article.revisions.length - 1];
+      if (!revision) throw new Error("å½“å‰æ–‡ç« æ²¡æœ‰å¯å®¡æ ¸ç‰ˆæœ¬");
+      return api.reviewArticle(article.id, revision.id, decision, decision === "approve" ? "å®¡æ ¸é€šè¿‡" : "è¯·è¡¥å……äº‹å®ä¾æ®å¹¶ä¼˜åŒ–è¡¨è¾¾");
+    },
+    onSuccess: (_, variables) => {
+      if (variables.decision === "approve") {
+        queryClient.setQueryData<Article[]>(["articles"], (current) => current?.map((item) => item.id === variables.article.id ? { ...item, status: "approved" } : item));
+        setSelectedArticleId(variables.article.id);
+        setPage("library");
+        message.success("å®¡æ ¸é€šè¿‡ï¼Œæ–‡ç« å·²ç§»å…¥æˆç¨¿åº“");
+      } else {
+        message.success("æ–‡ç« å·²é€€å›ä¿®æ”¹");
+      }
+      void refresh("articles", "jobs");
+    },
+    onError: (error: Error) => message.error(error.message),
+  });
+  const saveRevision = useMutation({ mutationFn: ({ articleId, title, markdown }: { articleId: string; title: string; markdown: string }) => api.addRevision(articleId, markdown, title), onSuccess: () => { void refresh("articles", "jobs"); message.success("æ–°ç‰ˆæœ¬å·²ä¿å­˜å¹¶é€å›å¾…å®¡æ ¸"); setPage("review"); }, onError: (error: Error) => message.error(error.message) });
+  const archiveArticle = useMutation({ mutationFn: api.archiveArticle, onSuccess: () => { setSelectedArticleId(null); void refresh("articles", "dashboard"); message.success("æ–‡ç« å·²ä»æœ¬åœ°æˆç¨¿åº“å½’æ¡£" ); }, onError: (error: Error) => message.error(error.message) });
+  const uploadThumb = useMutation({ mutationFn: (file: File) => { setDeliveryError(""); const blobUrl = URL.createObjectURL(file); setCoverPreviewUrl(blobUrl); return api.uploadWechatThumb(file, selectedChannelId || undefined); }, onSuccess: (result) => { setThumbMediaId(result.media_id); message.success("å°é¢ä¸Šä¼ æˆåŠŸ"); }, onError: (error: Error) => { setDeliveryError(error.message); message.error("å°é¢ä¸Šä¼ å¤±è´¥ï¼Œè¯·æŸ¥çœ‹äº¤ä»˜è®¾ç½®ä¸­çš„å¤„ç†æ–¹æ³•"); } });
+  const createDraft = useMutation({ mutationFn: (article: Article) => { setDeliveryError(""); const revision = article.revisions[article.revisions.length - 1]; if (!revision) throw new Error("å½“å‰æ–‡ç« æ²¡æœ‰å¯å‘å¸ƒç‰ˆæœ¬"); const payload = { thumb_media_id: thumbMediaId, channel_account_id: selectedChannelId || undefined, theme_id: selectedThemeId || undefined }; return article.status === "wechat_draft" ? api.updateWechatDraft(article.id, revision.id, payload) : api.createWechatDraft(article.id, revision.id, payload); }, onSuccess: () => { void refresh("articles", "publications"); message.success("å¾®ä¿¡è‰ç¨¿å·²å†™å…¥"); }, onError: (error: Error) => { setDeliveryError(error.message); message.error("å¾®ä¿¡è‰ç¨¿å†™å…¥å¤±è´¥ï¼Œè¯·æŸ¥çœ‹äº¤ä»˜è®¾ç½®ä¸­çš„å¤„ç†æ–¹æ³•"); } });
+  const publishDraft = useMutation({ mutationFn: (article: Article) => { const revision = article.revisions[article.revisions.length - 1]; if (!revision) throw new Error("å½“å‰æ–‡ç« æ²¡æœ‰å¯å‘å¸ƒç‰ˆæœ¬"); if (!selectedChannelId) throw new Error("è¯·å…ˆé€‰æ‹©å‘å¸ƒè´¦å·"); return api.publishWechatDraft(article.id, revision.id, selectedChannelId); }, onSuccess: () => { void refresh("articles", "publications"); message.success("å·²æäº¤å¾®ä¿¡å‘å¸ƒ"); }, onError: (error: Error) => message.error(error.message) });
+  const search = (value: string) => { const term = value.trim().toLowerCase(); if (!term) return; const material = materials.data?.find((item) => item.title.toLowerCase().includes(term)); if (material) { setSelectedMaterialId(material.id); setPage("materials"); return; } const article = articles.data?.find((item) => item.title.toLowerCase().includes(term)); if (article) { setSelectedArticleId(article.id); setPage("review"); return; } message.info("æ²¡æœ‰æ‰¾åˆ°åŒ¹é…å†…å®¹"); };
+  const selectedMaterial = materials.data?.find((item) => item.id === selectedMaterialId);
+  const selectedArticle = articles.data?.find((item) => item.id === selectedArticleId);
+  const libraryPreviewArticle = useMemo(() => {
+    const library = (articles.data ?? []).filter((article) =>
+      ["approved", "drafted", "wechat_draft", "publishing", "published"].includes(article.status) && hasFinalArticleBody(article),
+    );
+    return library.find((article) => article.id === selectedArticleId) ?? library[0];
+  }, [articles.data, selectedArticleId]);
+  const libraryPreviewRevision = libraryPreviewArticle?.revisions?.[(libraryPreviewArticle.revisions?.length ?? 1) - 1];
+  const libraryThemeId = useMemo(() => {
+    const snapshot = libraryPreviewArticle?.runtime_snapshot || {};
+    const theme = snapshot.theme as { id?: unknown } | undefined;
+    const execution = snapshot.execution_config as { theme_id?: unknown } | undefined;
+    return typeof theme?.id === "string"
+      ? theme.id
+      : typeof execution?.theme_id === "string"
+        ? execution.theme_id
+        : "";
+  }, [libraryPreviewArticle]);
+  useEffect(() => {
+    if (page === "library" && libraryThemeId && libraryThemeId !== selectedThemeId) {
+      setSelectedThemeId(libraryThemeId);
+    }
+  }, [libraryThemeId, page]);
+  const themePreview = useQuery({
+    queryKey: ["theme-preview", libraryPreviewArticle?.id, libraryPreviewRevision?.id, selectedThemeId],
+    queryFn: () => api.previewTheme(libraryPreviewArticle!.id, libraryPreviewRevision!.id, selectedThemeId),
+    enabled: page === "library" && Boolean(libraryPreviewArticle && libraryPreviewRevision && selectedThemeId),
+  });
+  const content = useMemo(() => {
+    if (page === "dashboard") return <Dashboard materials={materials.data || []} topics={topics.data || []} articles={articles.data || []} jobs={jobs.data || []} sourcesCount={dashboard.data?.sources || 0} onNavigate={setPage} onOpenReview={(id) => { setSelectedArticleId(id); setPage("review"); }} />;
+    if (page === "materials") return <MaterialWorkspace materials={materials.data || []} categories={materialCategories.data || []} loadError={[materials.error, materialCategories.error].filter((error): error is Error => error instanceof Error).map((error) => error.message).join("ï¼›")} sources={sources.data || []} skills={skills.data || []} strategies={strategies.data || []} curationResult={curationResult} creating={createFromMaterials.isPending} onCreate={(payload) => createFromMaterials.mutate(payload)} onManageSources={() => { setSettingsTab("sources"); setPage("settings"); }} onManageStrategies={() => { setSettingsTab("strategy"); setPage("settings"); }} onCollect={(ids) => collectSources.mutate(ids)} collecting={collectSources.isPending} onCurate={(strategyId) => curateMaterials.mutate(strategyId)} curating={curateMaterials.isPending} onClassify={(ids) => classifyMaterials.mutate(ids)} classifying={classifyMaterials.isPending} onTriage={(id, decision) => triage.mutate({ id, decision })} onAssignCategory={(id, categoryId) => assignMaterialCategory.mutate({ id, categoryId })} onAddCategory={(payload) => addMaterialCategory.mutateAsync(payload)} onUpdateCategory={(id, payload) => updateMaterialCategory.mutateAsync({ id, payload })} onDisableCategory={(id) => disableMaterialCategory.mutateAsync(id)} onRestoreCategory={(id) => restoreMaterialCategory.mutateAsync(id)} />;
+    if (page === "topics") return <TopicRadar topics={topics.data || []} strategies={strategies.data || []} algorithms={topicAlgorithms.data || []} scanning={scanTopics.isPending} writing={acceptTopic.isPending} managingAlgorithms={createTopicAlgorithm.isPending || updateTopicAlgorithm.isPending || deleteTopicAlgorithm.isPending} onScan={(strategyId, algorithmId) => scanTopics.mutate({ strategyId, algorithmId })} onWrite={(topic) => acceptTopic.mutate(topic)} onDismiss={(topic) => { void api.decideTopic(topic.id, "reject").then(() => refresh("topics", "materials")).catch((error: Error) => message.error(error.message)); }} onSaveMaterials={(topic) => saveTopicMaterials.mutate(topic)} onCreateAlgorithm={(payload) => createTopicAlgorithm.mutateAsync(payload)} onUpdateAlgorithm={(id, payload) => updateTopicAlgorithm.mutateAsync({ id, payload })} onDeleteAlgorithm={(id) => deleteTopicAlgorithm.mutateAsync(id)} />;
+    if (page === "review") return <ReviewQueue articles={articles.data || []} jobs={jobs.data || []} selectedId={selectedArticleId} pending={reviewArticle.isPending} retrying={retryJob.isPending} onSelect={setSelectedArticleId} onApprove={(article) => reviewArticle.mutate({ article, decision: "approve" })} onChanges={(article) => reviewArticle.mutate({ article, decision: "request_changes" })} onEdit={(id) => { setSelectedArticleId(id); setEditorReturnPage("review"); setPage("editor"); }} onRetry={(id) => retryJob.mutate(id)} />;
+    if (page === "library") return <ArticleLibrary articles={articles.data || []} selectedId={selectedArticleId} themes={themes.data || []} channels={channels.data || []} selectedThemeId={selectedThemeId} selectedChannelId={selectedChannelId} thumbMediaId={thumbMediaId} coverPreviewUrl={coverPreviewUrl} themePreviewHtml={themePreview.data?.html || ""} themePreviewLoading={themePreview.isLoading} themePreviewError={themePreview.error instanceof Error ? themePreview.error.message : ""} pending={createDraft.isPending || uploadThumb.isPending || archiveArticle.isPending} deliveryError={deliveryError} onSelect={(id) => { setSelectedArticleId(id); setDeliveryError(""); }} onEdit={(id) => { setSelectedArticleId(id); setEditorReturnPage("library"); setPage("editor"); }} onArchive={(article) => archiveArticle.mutate(article.id)} onThemeChange={setSelectedThemeId} onChannelChange={(id) => { setSelectedChannelId(id); setThumbMediaId(""); setDeliveryError(""); }} onUpload={(file) => uploadThumb.mutate(file)} onDraft={(article) => createDraft.mutate(article)} />;
+    if (page === "editor") return <ArticleEditor article={selectedArticle} onBack={() => setPage(editorReturnPage)} onSave={(articleId, title, markdown) => saveRevision.mutate({ articleId, title, markdown })} saving={saveRevision.isPending} />;
+    if (page === "settings") return (
+      <div>
+        <div className="figma-page" style={{ paddingBottom: 0 }}>
+          <div className="figma-tabs">
+            <button className={settingsTab === "strategy" ? "is-active" : ""} type="button" onClick={() => setSettingsTab("strategy")}>è‡ªåŠ¨åŒ–ç”Ÿäº§çº¿</button>
+            <button className={settingsTab === "sources" ? "is-active" : ""} type="button" onClick={() => setSettingsTab("sources")}>ä¿¡æ¯æº <b>{sources.data?.length || 0}</b></button>
+            <button className={settingsTab === "models" ? "is-active" : ""} type="button" onClick={() => setSettingsTab("models")}>æ¨¡å‹ä¸­å¿ƒ <b>{models.data?.length || 0}</b></button>
+            <button className={settingsTab === "channels" ? "is-active" : ""} type="button" onClick={() => setSettingsTab("channels")}>å…¬ä¼—å·è´¦å· <b>{channels.data?.length || 0}</b></button>
+            {currentUser.role === "admin" && <button className={settingsTab === "users" ? "is-active" : ""} type="button" onClick={() => setSettingsTab("users")}>ç”¨æˆ·ä¸­å¿ƒ <b>{users.data?.length || 0}</b></button>}
+          </div>
+        </div>
+        {settingsTab === "strategy" ? (
+          <StrategyPipelinePage strategies={strategies.data || []} selectedId={creatingStrategy ? null : selectedStrategyId} onSelect={(id) => { setCreatingStrategy(false); setSelectedStrategyId(id); }} onNew={() => { setCreatingStrategy(true); setSelectedStrategyId(null); }} categories={materialCategories.data || []} skills={skills.data || []} themes={themes.data || []} models={models.data || []} channels={channels.data || []} onSave={(id, payload) => saveStrategy.mutateAsync({ id, payload })} onRun={(id, combinationId) => runStrategy.mutateAsync({ id, combinationId })} onManageMaterials={() => setPage("materials")} onUploadThumb={async (file, channelId) => (await api.uploadWechatThumb(file, channelId)).media_id} onImportSkill={async (file) => { await importSkill.mutateAsync(file); }} importingSkill={importSkill.isPending} />
+        ) : settingsTab === "sources" ? (
+          <SourceCenter sources={sources.data || []} onAdd={() => setSourceOpen(true)} onAddRecommended={async (source) => { await addRecommendedSource.mutateAsync(source); }} onCollect={async (id) => { await collectSource.mutateAsync(id); }} onUpdate={async (id, source) => { await updateSource.mutateAsync({ id, source }); }} onDisable={async (id) => { await disableSource.mutateAsync(id); }} />
+        ) : settingsTab === "models" ? (          <ModelCenter models={models.data || []} onAdd={async (p) => { await addModel.mutateAsync(p); }} onUpdate={async (id, p) => { await updateModel.mutateAsync({ id, p }); }} onTest={(id) => testModel.mutate(id)} onDelete={async (id) => { await deleteModel.mutateAsync(id); }} />
+        ) : settingsTab === "channels" ? (
+          <ChannelCenter accounts={channels.data || []} onAdd={async (payload) => { await addChannel.mutateAsync(payload); }} onUpdate={async (id, { name, app_id, app_secret, enabled }) => { await updateChannel.mutateAsync({ id, payload: { name, app_id, app_secret, enabled } }); }} onTest={(id) => testChannel.mutate(id)} onDisable={async (id) => { await disableChannel.mutateAsync(id); }} />
+        ) : (
+          <UserCenter users={users.data || []} onAdd={async (payload) => { await addUser.mutateAsync(payload); }} />
+        )}
+      </div>
+    );
+  }, [acceptTopic, archiveArticle, articles.data, channels.data, coverPreviewUrl, createDraft, createFromMaterials, dashboard.data, deliveryError, editorReturnPage, jobs.data, materialCategories.data, materialCategories.error, materials.data, materials.error, models.data, page, publishDraft, reviewArticle, saveTopicMaterials, scanTopics, selectedArticleId, selectedChannelId, selectedMaterialId, selectedSkillId, selectedStrategyId, selectedThemeId, settingsTab, skills.data, sources.data, sourceType, strategies.data, themes.data, themePreview.data?.html, thumbMediaId, topicAlgorithms.data, topics.data, triage, updateTopicAlgorithm, users.data, updateSource, uploadThumb, collectSources, curateMaterials, classifyMaterials, assignMaterialCategory, addMaterialCategory, updateMaterialCategory, disableMaterialCategory, restoreMaterialCategory, retryJob]);
+  return <div className="figma-console"><FigmaSidebar page={page} onNavigate={setPage} onCreate={() => { setPage("topics"); setTopicOpen(true); }} onHelp={() => message.info("å¸®åŠ©ä¸­å¿ƒï¼šå…ˆç­›é€‰ç´ æï¼Œå†ç¡®è®¤é€‰é¢˜ã€é…ç½®ç­–ç•¥å¹¶å®¡æ ¸å‘å¸ƒã€‚")} onLogout={() => { void api.logout().then(() => window.location.reload()).catch((error: Error) => message.error(error.message)); }} /><div className="figma-main"><FigmaTopbar page={page} user={currentUser} notificationCount={(jobs.data || []).filter((item) => item.status.startsWith("failed") || item.status === "waiting_review").length} onSearch={search} onLogout={() => { void api.logout().then(() => window.location.reload()).catch((error: Error) => message.error(error.message)); }} />{content}</div>{(sourceOpen || topicOpen) && <div className="figma-modal-backdrop"><div className="figma-modal"><button className="modal-close" type="button" aria-label="å…³é—­" onClick={() => { setSourceOpen(false); setTopicOpen(false); }}><Icon name="close" size={18} /></button>{sourceOpen ? <><span className="eyebrow">SOURCE</span><h2>{sourceType === "manual" ? "ç²˜è´´æ‰‹åŠ¨ç´ æ" : "æ·»åŠ ä¿¡æ¯æº"}</h2><p>{sourceType === "manual" ? "ç›´æ¥ç²˜è´´ä¸€æ¡ç´ æï¼Œä¿å­˜åç«‹å³è¿›å…¥ç´ ææ± ï¼Œæ— éœ€å†ç­‰å¾…é‡‡é›†ã€‚" : sourceType === "rss" ? "æ·»åŠ ä¸€ä¸ª RSS è®¢é˜…åœ°å€ï¼Œç³»ç»Ÿä¼šæŒ‰ç”Ÿäº§çº¿çš„é¢‘ç‡é‡‡é›†æ–°å†…å®¹ã€‚" : sourceType === "aihot_api" ? "æ¥å…¥ AI HOT æœ€è¿‘ 24 å°æ—¶ç²¾é€‰èµ„è®¯ï¼ŒæŒ‰å®˜æ–¹åˆ†ç±»è‡ªåŠ¨å…¥åº“ã€‚" : "æ·»åŠ ä¸€ä¸ªç½‘é¡µæˆ–æ ç›®é¡µåœ°å€ï¼Œç³»ç»Ÿä¼šæ‰«æé¡µé¢æ­£æ–‡å¹¶é€å…¥å¾…ç­›é€‰ç´ æã€‚"}</p><form onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); if (sourceType === "manual") { const title = String(form.get("title") || "").trim(); const content = String(form.get("content") || "").trim(); const sourceName = String(form.get("source_name") || "æ‰‹åŠ¨å½•å…¥").trim(); if (!title || !content) { message.error("è¯·å¡«å†™ç´ ææ ‡é¢˜å’Œæ­£æ–‡ã€‚"); return; } addManualMaterial.mutate({ title, content, source_name: sourceName || "æ‰‹åŠ¨å½•å…¥" }); return; } const name = String(form.get("name") || "").trim(); const url = String(form.get("url") || "").trim(); const category = String(form.get("category") || "").trim() || undefined; if (!name || (sourceType !== "aihot_api" && !url)) { message.error(sourceType === "aihot_api" ? "è¯·å¡«å†™ä¿¡æ¯æºåç§°ã€‚" : "è¯·å¡«å†™ä¿¡æ¯æºåç§°å’Œåœ°å€ã€‚"); return; } addSource.mutate({ name, source_type: sourceType, url, category }); }}><label>ç±»å‹<select value={sourceType} onChange={(event) => setSourceType(event.target.value as "rss" | "url" | "manual" | "aihot_api")}><option value="rss">RSS è®¢é˜…</option><option value="url">ç½‘é¡µ URL</option><option value="aihot_api">AI HOT APIï¼ˆ24h ç²¾é€‰ï¼‰</option><option value="manual">æ‰‹åŠ¨ç²˜è´´ç´ æ</option></select></label>{sourceType === "manual" ? <><label>ç´ ææ ‡é¢˜<input name="title" required placeholder="è¿™æ¡ç´ æè®²ä»€ä¹ˆï¼Ÿ" /></label><label>ç´ ææ­£æ–‡<textarea name="content" required placeholder="ç²˜è´´å®Œæ•´æ­£æ–‡ã€æ‘˜å½•æˆ–ä½ çš„æƒ³æ³•â€¦" /></label><label>æ¥æºæ ‡ç­¾ï¼ˆå¯é€‰ï¼‰<input name="source_name" placeholder="ä¾‹å¦‚ï¼šæˆ‘çš„è§‚å¯Ÿ" /></label></> : sourceType === "aihot_api" ? <><label>ä¿¡æ¯æºåç§°<input name="name" required placeholder="ä¾‹å¦‚ï¼šAI HOT 24h ç²¾é€‰" /></label><label>åˆ†ç±»ï¼ˆå¯é€‰ï¼‰<select name="category"><option value="">å…¨éƒ¨åˆ†ç±»</option><option value="ai-models">AI æ¨¡å‹</option><option value="ai-products">AI äº§å“</option><option value="industry">è¡Œä¸šåŠ¨æ€</option><option value="paper">è®ºæ–‡</option><option value="tip">æŠ€å·§</option></select></label></> : <><label>ä¿¡æ¯æºåç§°<input name="name" required placeholder={sourceType === "rss" ? "ä¾‹å¦‚ï¼š36æ°ª RSS" : "ä¾‹å¦‚ï¼šMIT Technology Review"} /></label><label>{sourceType === "rss" ? "RSS åœ°å€" : "ç½‘é¡µåœ°å€"}<input name="url" type="url" required placeholder="https://..." /></label></>}<PillButton type="submit" tone="pink">{sourceType === "manual" ? "åŠ å…¥ç´ ææ± " : "æ·»åŠ ä¿¡æ¯æº"}</PillButton></form></> : <><span className="eyebrow">NEW TOPIC</span><h2>åˆ›å»ºå€™é€‰é€‰é¢˜</h2><p>å…ˆç¡®è®¤é€‰é¢˜ï¼Œå†è¿›å…¥ AI åˆ›ä½œæµç¨‹ã€‚</p><form onSubmit={(event) => { event.preventDefault(); createTopic.mutate(); }}><label>é€‰é¢˜æ ‡é¢˜<input value={topicTitle} onChange={(event) => setTopicTitle(event.target.value)} required placeholder="è¾“å…¥ä¸€ä¸ªå€¼å¾—åˆ›ä½œçš„é€‰é¢˜" /></label><label>æ‰€å±ç­–ç•¥<select value={topicStrategyId} onChange={(event) => setTopicStrategyId(event.target.value)} required><option value="">è¯·é€‰æ‹©ç­–ç•¥</option>{(strategies.data || []).map((strategy) => <option key={strategy.id} value={strategy.id}>{strategy.name}</option>)}</select></label><PillButton type="submit" tone="pink">åˆ›å»ºå€™é€‰é€‰é¢˜</PillButton></form></>}</div></div>}{selectedMaterial && null}</div>;
+}
