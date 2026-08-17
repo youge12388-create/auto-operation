@@ -46,6 +46,7 @@ type CreatePayload = { materialIds: string[]; strategyId: string; title?: string
 export function MaterialWorkspace({
   materials, categories, sources, skills, strategies, loadError, creating, onCreate, onManageSources, onCollect, collecting, onCurate, curating, curationResult,
   onClassify, classifying, onTriage, onAssignCategory, onAddCategory, onUpdateCategory, onDisableCategory, onRestoreCategory,
+  onManageStrategies,
 }: {
   materials: Material[];
   categories: MaterialCategory[];
@@ -56,6 +57,7 @@ export function MaterialWorkspace({
   creating: boolean;
   onCreate: (payload: CreatePayload) => void;
   onManageSources: () => void;
+  onManageStrategies: () => void;
   onCollect: (ids: string[]) => void;
   collecting: boolean;
   onCurate: (strategyId: string) => void;
@@ -93,6 +95,8 @@ export function MaterialWorkspace({
   const retained = useMemo(() => materials.filter((item) => item.triage_status === "selected" || item.triage_status === "used"), [materials]);
   const inbox = useMemo(() => materials.filter((item) => item.triage_status === "inbox"), [materials]);
   const ignored = useMemo(() => materials.filter((item) => item.triage_status === "ignored"), [materials]);
+  const hasEnabledStrategy = strategies.some((item) => item.enabled);
+  const selectedInboxCount = materials.filter((item) => selectedIds.includes(item.id) && item.triage_status === "inbox").length;
   const viewMaterials = view === "inbox" ? inbox : view === "retained" ? retained : ignored;
   const sourceFiltered = viewMaterials.filter((item) =>
     (!sourceId || item.source_id === sourceId) && (!categoryId || item.category_id === categoryId),
@@ -181,7 +185,7 @@ export function MaterialWorkspace({
         {view === "inbox" && <><button className="flow-secondary" type="button" disabled={classifying || !materials.some((item) => item.classification_status !== "classified")} onClick={() => onClassify()}><Icon name="magic" size={15} /> {classifying ? "AI 分类中…" : "重试 AI 分类"}</button><select className="flow-select" value={curationStrategyId} onChange={(event) => setCurationStrategyId(event.target.value)} aria-label="AI 精选策略"><option value="">选择精选策略</option>{strategies.filter((item) => item.enabled).map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select><button className="flow-secondary flow-ai-button" type="button" disabled={!inbox.length || !curationStrategyId || curating} onClick={() => onCurate(curationStrategyId)}><Icon name="spark" size={15} /> {curating ? "AI 审核中…" : "AI 精选素材"}</button></>}
 
       </section>
-      {selectedIds.length > 0 && <div className="flow-selection-bar"><span>已选 <b>{selectedIds.length}</b> 条素材</span><button className="flow-secondary" type="button" onClick={() => setSelectedIds([])}>清空选择</button><button className="flow-primary" type="button" disabled={!strategyId} onClick={() => setComposerOpen(true)}>下一步：创建选题并写作</button></div>}
+      {selectedIds.length > 0 && <div className="flow-selection-bar"><span>已选 <b>{selectedIds.length}</b> 条素材</span><button className="flow-secondary" type="button" onClick={() => setSelectedIds([])}>清空选择</button><button className="flow-primary" type="button" disabled={creating || (hasEnabledStrategy && selectedInboxCount > 0)} onClick={() => { if (!hasEnabledStrategy) { onManageStrategies(); return; } if (selectedInboxCount === 0) setComposerOpen(true); }}>{hasEnabledStrategy ? "下一步：创建选题并写作" : "先创建生产线"}</button>{!hasEnabledStrategy && <small className="flow-selection-hint">请先到“自动化”保存并启用一条生产线。</small>}{hasEnabledStrategy && selectedInboxCount > 0 && <small className="flow-selection-hint">已选的 {selectedInboxCount} 条素材还在“待 AI 精选”区，请先点击卡片底部的“保留”。</small>}</div>}
       {curationResult && <div className="flow-notice" role="status"><Icon name="check" size={17} /><div><strong>AI 精选已完成</strong><span>{curationResult.message}</span></div></div>}
       {visible.length ? <section className="retained-grid">{visible.map((material) => {
         const selected = selectedIds.includes(material.id);
