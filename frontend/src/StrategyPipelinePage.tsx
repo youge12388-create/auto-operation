@@ -299,34 +299,7 @@ export function StrategyPipelinePage(props: Props) {
     if (!draft.combinations.length) throw new Error(TEXT.keepOne);
     if (!draft.combinations.some((item) => item.enabled)) throw new Error(TEXT.enableOne);
     const defaultId = draft.combinations.some((item) => item.id === draft.defaultCombinationId && item.enabled)
-      ? draft.defaultCombinationId
-      : draft.combinations.find((item) => item.enabled)!.id;
-    return {
-      name: draft.name.trim() || TEXT.newName,
-      objective: draft.objective.trim() || TEXT.defaultObjective,
-      schedule: validatedSchedule(draft.schedule),
-      automation_level: draft.automationLevel,
-      enabled: draft.enabled,
-      config: {
-        ...stripCombinationFields(current?.config ?? {}),
-        selection_mode: draft.selectionMode,
-        default_combination_id: defaultId,
-        strategy_combinations: draft.combinations.map((item) => ({
-          ...item,
-          name: item.name.trim() || TEXT.unnamed,
-          config: sanitizeCombinationConfig(item.config),
-        })),
-      },
-    };
-  };
-
-  const uploadThumb = async (file: File) => {
-    const channelId = active?.config.channel_account_id;
-    if (!channelId) {
-      setError("请先选择微信公众号账号！");
-      return;
-    }
-    if (!['image/jpeg', 'image/png'].includes(file.type)) {
+      ? draft.defaultCom�}m�G����ƭy�ile.type)) {
       setError("封面只支持 JPG 或 PNG 图片");
       return;
     }
@@ -433,4 +406,3 @@ export function StrategyPipelinePage(props: Props) {
     </section>
   </main>;
 }
-
