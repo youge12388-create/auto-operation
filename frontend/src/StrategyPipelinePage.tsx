@@ -106,6 +106,7 @@ type Props = {
   onSave: (id: string | undefined, payload: SavePayload) => Promise<Strategy>;
   onRun: (id: string, combinationId?: string) => Promise<Job>;
   onManageMaterials: () => void;
+  onUploadThumb: (file: File, channelId: string) => Promise<string>;
   onImportSkill: (file: File) => Promise<void>;
   importingSkill: boolean;
 };
@@ -230,6 +231,8 @@ export function StrategyPipelinePage(props: Props) {
   const [busy, setBusy] = useState<"save" | "auto" | "current" | null>(null);
   const [error, setError] = useState("");
   const skillFileRef = useRef<HTMLInputElement | null>(null);
+  const thumbFileRef = useRef<HTMLInputElement | null>(null);
+  const [thumbUploading, setThumbUploading] = useState(false);
 
   useEffect(() => {
     const next = initialDraft(current, props.categories, props.skills, props.models, props.themes, props.channels);
@@ -317,6 +320,28 @@ export function StrategyPipelinePage(props: Props) {
     };
   };
 
+  const uploadThumb = async (file: File) => {
+    const channelId = active?.config.channel_account_id;
+    if (!channelId) {
+      setError("请先选择微信公众号账号！");
+      return;
+    }
+    if (!['image/jpeg', 'image/png'].includes(file.type)) {
+      setError("封面只支持 JPG 或 PNG 图片");
+      return;
+    }
+    setError("");
+    setThumbUploading(true);
+    try {
+      const mediaId = await props.onUploadThumb(file, channelId);
+      updateActive((item) => ({ ...item, config: { ...item.config, wechat_thumb_media_id: mediaId } }));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "封面上传失败");
+    } finally {
+      setThumbUploading(false);
+    }
+  };
+
   const save = async (run: "auto" | "current" | null = null) => {
     setError("");
     setBusy(run ?? "save");
@@ -391,7 +416,7 @@ export function StrategyPipelinePage(props: Props) {
               <label className="combination-review"><small>{TEXT.translation}</small><button type="button" className={active.config.translate_foreign_sources !== false ? "is-on" : ""} onClick={() => updateActive((item) => ({ ...item, config: { ...item.config, translate_foreign_sources: item.config.translate_foreign_sources === false } }))}>{active.config.translate_foreign_sources !== false ? TEXT.on : TEXT.off}</button><span>{TEXT.translationHelp}</span></label><label><small>{TEXT.theme}</small><select value={active.config.theme_id ?? ""} onChange={(event) => updateActive((item) => ({ ...item, config: { ...item.config, theme_id: event.target.value || undefined } }))}><option value="">{TEXT.disabled}</option>{enabledThemes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
               <label className="combination-review"><small>{TEXT.review}</small><button type="button" disabled={active.config.delivery_mode === "auto_publish"} className={(active.config.review_rules?.human_review_required ?? false) ? "is-on" : ""} onClick={() => updateActive((item) => ({ ...item, config: { ...item.config, review_rules: { ...(item.config.review_rules ?? {}), human_review_required: !(item.config.review_rules?.human_review_required ?? false) } } }))}>{(active.config.review_rules?.human_review_required ?? false) ? TEXT.on : TEXT.off}</button><span>{active.config.delivery_mode === "auto_publish" ? "AI 审核须通过 75 分且联网事实核验完整；否则进入人工审核" : "默认关闭；开启后文章必须由你通过后才能交付"}</span></label>
               <label><small>交付模式</small><select value={active.config.delivery_mode ?? "local_draft"} onChange={(event) => updateActive((item) => { const deliveryMode = event.target.value as "local_draft" | "wechat_draft" | "auto_publish"; return { ...item, config: { ...item.config, delivery_mode: deliveryMode, review_rules: { ...(item.config.review_rules ?? {}), human_review_required: deliveryMode === "auto_publish" ? false : (item.config.review_rules?.human_review_required ?? false) } } }; })}><option value="local_draft">本地成稿（不调用微信）</option><option value="wechat_draft">微信草稿测试</option><option value="auto_publish">自动正式发布</option></select><span>{active.config.delivery_mode === "auto_publish" ? "会先创建草稿；默认开启评论；只有服务器全局发布开关开启且账号有权限时才提交正式发布" : active.config.delivery_mode === "wechat_draft" ? "自动写入微信草稿，不会正式发布" : "生成后进入本系统成稿库"}</span></label>
-              {(active.config.delivery_mode === "wechat_draft" || active.config.delivery_mode === "auto_publish") && <><label><small>微信公众号</small><select value={active.config.channel_account_id ?? ""} onChange={(event) => updateActive((item) => ({ ...item, config: { ...item.config, channel_account_id: event.target.value || undefined } }))}><option value="">请选择账号</option>{enabledChannels.map((channel) => <option key={channel.id} value={channel.id}>{channel.name}{channel.capabilities.publish ? " · 可发布" : " · 仅草稿"}</option>)}</select></label><label><small>默认封面素材 ID</small><input value={active.config.wechat_thumb_media_id ?? ""} onChange={(event) => updateActive((item) => ({ ...item, config: { ...item.config, wechat_thumb_media_id: event.target.value.trim() || undefined } }))} placeholder="微信永久素材 media_id" /><span>自动交付必须使用已经上传到该公众号的永久封面素材</span></label></>}
+              {(active.config.delivery_mode === "wechat_draft" || active.config.delivery_mode === "auto_publish") && <><label><small>微信公众号</small><select value={active.config.channel_account_id ?? ""} onChange={(event) => updateActive((item) => ({ ...item, config: { ...item.config, channel_account_id: event.target.value || undefined, wechat_thumb_media_id: event.target.value === item.config.channel_account_id ? item.config.wechat_thumb_media_id : undefined } }))}><option value="">请选择账号</option>{enabledChannels.map((channel) => <option key={channel.id} value={channel.id}>{channel.name}{channel.capabilities.publish ? " · 可发布" : " · 仅草稿"}</option>)}</select></label><label><small>默认封面素材 ID</small><input value={active.config.wechat_thumb_media_id ?? ""} onChange={(event) => updateActive((item) => ({ ...item, config: { ...item.config, wechat_thumb_media_id: event.target.value.trim() || undefined } }))} placeholder="微信永久素材 media_id" /><button type="button" className="flow-secondary" disabled={!active.config.channel_account_id || thumbUploading} onClick={() => thumbFileRef.current?.click()}>{thumbUploading ? "上传中…" : "上传 JPG/PNG 封面"}</button><span>{active.config.wechat_thumb_media_id ? "封面已上传并回填 media_id" : "自动交付必须使用已经上传到该公众号的永久封面素材"}</span></label><input ref={thumbFileRef} type="file" accept="image/jpeg,image/png" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadThumb(file); event.target.value = ""; }} /></>}
               <label className="combination-range"><small>{TEXT.humanization} <b>{Number(active.config.humanization ?? 75)}%</b></small><input type="range" min="0" max="100" value={Number(active.config.humanization ?? 75)} onChange={(event) => updateActive((item) => ({ ...item, config: { ...item.config, humanization: Number(event.target.value) } }))} /></label>
             </div>
             <div className="combination-summary"><span><Icon name="database" size={15} />{active.config.material_category_ids?.length || TEXT.all}</span><b>{"\u2192"}</b><span><Icon name="magic" size={15} />{resourceNames.skills.get((active.config.skill_by_stage ?? {}).writing ?? active.config.skill_ids?.[0] ?? "") ?? TEXT.default}</span><b>{"\u2192"}</b><span><Icon name="robot" size={15} />{resourceNames.models.get((active.config.model_by_stage ?? {}).writing ?? "") ?? TEXT.default}</span><b>{"\u2192"}</b><span><Icon name="image" size={15} />{resourceNames.themes.get(active.config.theme_id ?? "") ?? TEXT.default}</span><b>{"→"}</b><span><Icon name="mail" size={15} />{active.config.delivery_mode === "auto_publish" ? "自动发布" : active.config.delivery_mode === "wechat_draft" ? (resourceNames.channels.get(active.config.channel_account_id ?? "") ?? "微信草稿") : "本地成稿"}</span></div>
