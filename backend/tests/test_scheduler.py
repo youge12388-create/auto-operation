@@ -31,6 +31,32 @@ def test_normalize_schedule_rejects_invalid_fixed_daily_time():
     else:
         raise AssertionError("invalid fixed daily time must be rejected")
 
+def test_enqueue_due_jobs_skips_failing_strategy(db, monkeypatch):
+    good = Strategy(name="good", objective="good", schedule="hourly", enabled=True)
+    good.config_json = {"review_rules": {"human_review_required": True}}
+    bad = Strategy(name="bad", objective="bad", schedule="hourly", enabled=True)
+    bad.config_json = {"review_rules": {"human_review_required": True}}
+    db.add_all([good, bad])
+    db.commit()
+
+    from content_ops import scheduler as scheduler_module
+
+    original_create_job = scheduler_module.create_job
+
+    def flaky_create_job(db_, strategy, idempotency_key, **kwargs):
+        if strategy.name == "bad":
+            raise ValueError("strategy boom")
+        return original_create_job(db_, strategy, idempotency_key, **kwargs)
+
+    monkeypatch.setattr(scheduler_module, "create_job", flaky_create_job)
+    now = datetime(2026, 7, 27, 8, 30, tzinfo=timezone.utc)
+
+    jobs = enqueue_due_jobs(db, now)
+
+    assert len(jobs) == 1
+    assert jobs[0].strategy_id == good.id
+
+
 def test_enqueue_due_jobs_is_idempotent(db):
     source = Source(
         name="scheduled-source",

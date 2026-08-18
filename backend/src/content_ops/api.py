@@ -975,6 +975,9 @@ def curate_materials_now(
         )
     if model is None or not model.enabled:
         raise HTTPException(status_code=400, detail="请先在模型中心配置一个启用的模型，再进行 AI 精选")
+    # End the read transaction from the model lookup before the model call;
+    # the SQLite write lock must not be held across the network request.
+    db.commit()
     try:
         selected = run_material_curation(
             db,
@@ -1065,22 +1068,33 @@ def add_manual_material(
     )
     db.add(material)
     db.flush()
+    # Persist the material and release the write lock before the classification
+    # model call below; keeping the transaction open across the network call
+    # blocks the worker process on SQLite.
+    db.commit()
     categories = db.scalars(
         select(MaterialCategory).where(MaterialCategory.enabled.is_(True)).order_by(MaterialCategory.name)
     ).all()
     model = db.scalar(
         select(ModelConfig).where(ModelConfig.enabled.is_(True)).order_by(ModelConfig.created_at.desc())
     )
-    run_material_classification(
-        db,
-        None,
-        [material],
-        categories,
-        provider_for(model) if model is not None else None,
-        model,
-    )
-    add_audit(db, user, "material.manual_create", "source_item", material.id, {"source_id": source.id})
+    # End the transaction opened by the lookups above before the classification
+    # model call so the SQLite write lock is not held across the network request.
     db.commit()
+    try:
+        run_material_classification(
+            db,
+            None,
+            [material],
+            categories,
+            provider_for(model) if model is not None else None,
+            model,
+        )
+        add_audit(db, user, "material.manual_create", "source_item", material.id, {"source_id": source.id})
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=502, detail=f"素材分类失败：{exc}") from exc
     db.refresh(material)
     return material_read(material)
 

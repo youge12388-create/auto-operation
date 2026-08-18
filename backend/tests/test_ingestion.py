@@ -135,3 +135,73 @@ def test_aihot_api_collection_maps_category_without_model_calls(monkeypatch, db)
     assert items[1].category_id == products.id
     assert source.last_error is None
     assert source.last_success_at is not None
+
+
+def test_rss_entries_without_links_do_not_overwrite_each_other(monkeypatch, db):
+    rss_xml = (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        '<rss version="2.0"><channel><title>测试</title>'
+        "<item><title>第一</title><description>内容一</description></item>"
+        "<item><title>第二</title><description>内容二</description></item>"
+        "</channel></rss>"
+    ).encode("utf-8")
+
+    def fake_get(url, timeout=None, follow_redirects=None):
+        return httpx.Response(200, request=httpx.Request("GET", str(url)), content=rss_xml)
+
+    monkeypatch.setattr("content_ops.ingestion.httpx.get", fake_get)
+    source = Source(name="无链接 RSS", source_type="rss", url="https://example.com/feed")
+    db.add(source)
+    db.commit()
+
+    items = collect_source(db, source)
+    db.commit()
+
+    # Both entries lack a link; they must be kept as separate items instead of
+    # the second one overwriting the first via the shared source-URL canonical.
+    assert len(items) == 2
+    assert {item.title for item in items} == {"第一", "第二"}
+
+
+def test_aihot_items_without_links_do_not_overwrite_each_other(monkeypatch, db):
+    def fake_get(url, params=None, timeout=None):
+        return httpx.Response(
+            200,
+            request=httpx.Request("GET", str(url)),
+            json={
+                "items": [
+                    {
+                        "id": "item-1",
+                        "title": "条目一",
+                        "summary": "内容一",
+                        "category": None,
+                        "publishedAt": "2026-08-05T01:00:00Z",
+                        "links": {},
+                    },
+                    {
+                        "id": "item-2",
+                        "title": "条目二",
+                        "summary": "内容二",
+                        "category": None,
+                        "publishedAt": "2026-08-05T02:00:00Z",
+                        "links": {},
+                    },
+                ]
+            },
+        )
+
+    monkeypatch.setattr("content_ops.ingestion.httpx.get", fake_get)
+    source = Source(
+        name="AI HOT",
+        source_type="aihot_api",
+        url="https://aihot.virxact.com/api/v1/items",
+        config_json={"window": "24h", "limit": 100},
+    )
+    db.add(source)
+    db.commit()
+
+    items = collect_source(db, source)
+    db.commit()
+
+    assert len(items) == 2
+    assert {item.title for item in items} == {"条目一", "条目二"}

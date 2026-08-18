@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import re
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
@@ -9,6 +10,8 @@ from sqlalchemy.orm import Session
 
 from .models import Job, Strategy
 from .workflow import create_job
+
+logger = logging.getLogger(__name__)
 
 _DAILY_AT_PATTERN = re.compile(r"daily@([01]\d|2[0-3]):[0-5]\d$")
 _SCHEDULE_TIME_ZONE = ZoneInfo("Asia/Shanghai")
@@ -48,12 +51,17 @@ def enqueue_due_jobs(db: Session, now: datetime | None = None) -> list[Job]:
     created: list[Job] = []
     strategies = db.scalars(select(Strategy).where(Strategy.enabled.is_(True))).all()
     for strategy in strategies:
-        window = schedule_window(strategy.schedule, current)
-        if window is None:
-            continue
-        key = f"schedule:{strategy.id}:{window}"
-        existing = db.scalar(select(Job).where(Job.idempotency_key == key))
-        if existing is not None:
-            continue
-        created.append(create_job(db, strategy, key, payload={"mode": "automation"}))
+        try:
+            window = schedule_window(strategy.schedule, current)
+            if window is None:
+                continue
+            key = f"schedule:{strategy.id}:{window}"
+            existing = db.scalar(select(Job).where(Job.idempotency_key == key))
+            if existing is not None:
+                continue
+            created.append(create_job(db, strategy, key, payload={"mode": "automation"}))
+        except Exception:
+            # One broken strategy must not terminate the worker loop.
+            db.rollback()
+            logger.exception("跳过策略 %s 的定时任务入队", strategy.id)
     return created

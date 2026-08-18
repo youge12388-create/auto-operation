@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import signal
 import threading
 import time
@@ -14,6 +15,8 @@ from .queueing import create_listener
 from .scheduler import enqueue_due_jobs
 from .settings import get_settings
 from .workflow import run_job
+
+logger = logging.getLogger(__name__)
 
 # Graceful shutdown flag
 _shutdown_requested = False

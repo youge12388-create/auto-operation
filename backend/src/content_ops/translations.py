@@ -73,8 +73,10 @@ def translate_source_items(
             status="running",
             input_summary=f"Material translation: {original_title[:160]}",
         )
+        # Keep the write transaction closed while the network call is in flight.
+        # SQLite allows only one writer; holding the lock across a slow model
+        # call blocks the API/worker process pair with `database is locked`.
         db.add(log)
-        db.flush()
         try:
             response = provider.complete(request)
             translated_title, translated_content = _translated_payload(response.text)
@@ -93,6 +95,28 @@ def translate_source_items(
             log.status = "failed"
             log.duration_ms = int((time.perf_counter() - started) * 1000)
             log.error = str(exc)
+            try:
+                db.flush()
+                db.commit()
+            except Exception:
+                try:
+                    db.rollback()
+                except Exception:
+                    pass
             raise
-    db.flush()
+        # Commit each item so a later failure does not discard already translated
+        # material (and the paid model call behind it), and failed calls stay
+        # observable in model_call_logs.
+        try:
+            db.flush()
+            db.commit()
+        except Exception:
+            # A failed flush leaves the session in a pending-rollback state;
+            # using it again would raise PendingRollbackError and hide the
+            # original database error. Recover first, then surface the real one.
+            try:
+                db.rollback()
+            except Exception:
+                pass
+            raise
     return translated_count

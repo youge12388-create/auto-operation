@@ -136,8 +136,15 @@ def collect_source(
             for entry in payload.get("items") or []:
                 links = entry.get("links") or {}
                 title = entry.get("title") or entry.get("originalTitle") or ""
-                url = links.get("original") or links.get("aihot") or source.url
                 summary = entry.get("summary") or ""
+                # Items without any link must not all map to the source URL,
+                # which would make later items overwrite earlier ones; anchor
+                # them on the content digest instead.
+                url = (
+                    links.get("original")
+                    or links.get("aihot")
+                    or f"aihot://{source.id}/{content_hash(summary or title)}"
+                )
                 item = _upsert_item(db, source, title, url, summary)
                 item.published_at = _parse_iso_datetime(entry.get("publishedAt"))
                 category = _aihot_category(db, entry.get("category"))
@@ -152,20 +159,24 @@ def collect_source(
             response = httpx.get(source.url, timeout=30, follow_redirects=True)
             response.raise_for_status()
             if source.source_type == "rss":
-                items = [
-                    _upsert_item(
-                        db,
-                        source,
-                        entry.get("title", ""),
-                        entry.get("link", source.url),
-                        entry.get("summary") or entry.get("description") or entry.get("title", ""),
-                    )
-                    for entry in feedparser.parse(response.content).entries
-                ]
+                items = []
+                for entry in feedparser.parse(response.content).entries:
+                    link = (entry.get("link") or "").strip()
+                    content = entry.get("summary") or entry.get("description") or entry.get("title", "")
+                    # Entries without a unique link must not all map to the source
+                    # URL: that canonical collision makes later entries overwrite
+                    # earlier ones. Anchor them on the content digest instead,
+                    # which keeps genuine repeats idempotent.
+                    url = link or f"rss://{source.id}/{content_hash(content)}"
+                    items.append(_upsert_item(db, source, entry.get("title", ""), url, content))
             else:
                 content = trafilatura.extract(response.text) or response.text[:4000]
                 items = [_upsert_item(db, source, source.name, str(response.url), content)]
         if translate_foreign_sources and any(needs_chinese_translation(item) for item in items):
+            # Persist collected items and release the write transaction before the
+            # translation model calls; SQLite serializes writers and a lock held
+            # across slow network calls blocks the API/worker process pair.
+            db.commit()
             if translation_provider is None:
                 translation_model = translation_model or db.scalar(
                     select(ModelConfig).where(ModelConfig.enabled.is_(True)).order_by(ModelConfig.created_at.desc())
@@ -173,13 +184,22 @@ def collect_source(
                 translation_provider = provider_for(translation_model) if translation_model else None
             if translation_provider is None:
                 raise ValueError("外文信息源需要先配置一个启用的翻译模型")
+            # End the transaction opened by the model lookup above. With BEGIN
+            # IMMEDIATE the first statement already takes the write lock, so it
+            # must not stay held across the translation model calls.
+            db.commit()
             translate_source_items(db, translation_job, items, translation_provider, translation_model)
+            # Free the lock again before classification model calls below.
+            db.commit()
         classification_candidates = [
             item
             for item in items
             if item.status == "verified" and item.classification_status in {"pending", "failed"}
         ]
         if classification_candidates:
+            # Release any write transaction (e.g. a newly created AI HOT category)
+            # before the classification model calls, mirroring the translation path.
+            db.commit()
             classification_model = translation_model or db.scalar(
                 select(ModelConfig).where(ModelConfig.enabled.is_(True)).order_by(ModelConfig.created_at.desc())
             )
@@ -191,6 +211,9 @@ def collect_source(
             categories = db.scalars(
                 select(MaterialCategory).where(MaterialCategory.enabled.is_(True)).order_by(MaterialCategory.name)
             ).all()
+            # End the transaction opened by the lookups above; the classification
+            # model call must not hold the SQLite write lock.
+            db.commit()
             classify_materials(
                 db,
                 translation_job,
@@ -201,9 +224,28 @@ def collect_source(
             )
         source.last_success_at = datetime.now(timezone.utc)
         source.last_error = None
-        db.flush()
+        # Commit each source independently. Keeping the transaction open across
+        # sources would hold the SQLite write lock between sources, and a later
+        # source's failure (which rolls back the shared session) could discard
+        # already collected items.
+        db.commit()
         return items
     except Exception as exc:
+        # The session may be mid-rollback after a failed flush; recover it before
+        # persisting the failure marker, and never let a secondary exception hide
+        # the original one. Commit the marker so callers that roll back on failure
+        # (e.g. the synchronous collect endpoint) still surface the real reason.
+        try:
+            db.rollback()
+        except Exception:
+            pass
         source.last_error = str(exc)
-        db.flush()
+        try:
+            db.flush()
+            db.commit()
+        except Exception:
+            try:
+                db.rollback()
+            except Exception:
+                pass
         raise
