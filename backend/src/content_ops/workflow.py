@@ -8,6 +8,7 @@ from typing import Any
 
 from markdown_it import MarkdownIt
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .delivery import deliver_article
@@ -117,7 +118,16 @@ def create_job(
         payload_json=job_payload,
     )
     db.add(job)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # A concurrent enqueue may have committed the same idempotency key
+        # between our existence check and this commit; return the winner.
+        db.rollback()
+        existing = db.scalar(select(Job).where(Job.idempotency_key == idempotency_key))
+        if existing is not None:
+            return existing
+        raise
     db.refresh(job)
     return job
 
@@ -526,13 +536,29 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
             if source_ids:
                 source_query = source_query.where(Source.id.in_(source_ids))
             for source in db.scalars(source_query).all():
-                for item in collect_source(
-                    db,
-                    source,
-                    translation_job=job,
-                    translate_foreign_sources=strategy_config.get("translate_foreign_sources", True),
-                ):
-                    collected.append(item.id)
+                try:
+                    for item in collect_source(
+                        db,
+                        source,
+                        translation_job=job,
+                        translate_foreign_sources=strategy_config.get("translate_foreign_sources", True),
+                    ):
+                        collected.append(item.id)
+                except Exception as exc:
+                    # Isolate a failing source so one bad feed cannot fail the
+                    # whole scan, mirroring the automation collect step.
+                    _job_event(
+                        db,
+                        job,
+                        "source_failed",
+                        "collect",
+                        "failed",
+                        {"source": source.name, "error": str(exc)[:500]},
+                    )
+                    try:
+                        db.commit()
+                    except Exception:
+                        db.rollback()
             return {"item_ids": collected, "material_count": len(collected)}
 
         collect_output = _run_step(db, job, "collect", collect_for_triage)
@@ -708,6 +734,13 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
                     "failed",
                     {"source": source.name, "error": str(exc)[:500]},
                 )
+                try:
+                    # Persist the failure event right away: a later source's
+                    # collect_source may roll back the shared session, which
+                    # would otherwise discard this pending event.
+                    db.commit()
+                except Exception:
+                    db.rollback()
         db.commit()
         return {
             "item_ids": collected_items,

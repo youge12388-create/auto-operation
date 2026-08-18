@@ -9,6 +9,7 @@ from content_ops.models import (
     JobEvent,
     JobStep,
     ModelCallLog,
+    ModelConfig,
     Review,
     Source,
     Strategy,
@@ -174,3 +175,48 @@ def test_collect_isolates_failed_source_and_keeps_job_running(db, monkeypatch):
     assert "bad" in step.output_json["failed_sources"]
     assert bad.last_error is not None
     assert db.scalar(select(Article).where(Article.job_id == job.id)) is not None
+
+
+def test_scan_isolates_failed_source_and_keeps_scan_running(db, monkeypatch):
+    good = Source(
+        name="good",
+        source_type="manual",
+        url="https://example.com/good",
+        config_json={"title": "可用素材", "content": "官方公告确认产品已发布。"},
+    )
+    bad = Source(
+        name="bad",
+        source_type="manual",
+        url="https://example.com/bad",
+        config_json={"title": "失败素材", "content": "这条来源会失败。"},
+    )
+    model = ModelConfig(name="scan-model", provider="fake", enabled=True)
+    db.add_all([good, bad, model])
+    db.flush()
+    strategy = Strategy(name="扫描隔离", objective="测试单源失败不中断扫描")
+    strategy.config_json = {"default_model_id": model.id}
+    db.add(strategy)
+    db.commit()
+
+    real_collect_source = workflow.collect_source
+
+    def flaky_collect_source(db_session, source, **kwargs):
+        if source.name == "bad":
+            source.last_error = "simulated network failure"
+            db_session.commit()
+            raise ConnectionError("simulated network failure")
+        return real_collect_source(db_session, source, **kwargs)
+
+    monkeypatch.setattr(workflow, "collect_source", flaky_collect_source)
+    job = create_job(db, strategy, "scan-isolation", payload={"mode": "scan"})
+    result = run_job(db, job.id, FakeProvider())
+
+    assert result.status == "waiting_topic"
+    step = db.scalar(select(JobStep).where(JobStep.job_id == job.id, JobStep.step_name == "collect"))
+    assert step.status == "succeeded"
+    assert bad.last_error == "simulated network failure"
+    failed_events = db.scalars(
+        select(JobEvent).where(JobEvent.job_id == job.id, JobEvent.event_type == "source_failed")
+    ).all()
+    assert len(failed_events) == 1
+    assert failed_events[0].payload_json["source"] == "bad"
