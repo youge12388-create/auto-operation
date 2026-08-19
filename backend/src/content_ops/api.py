@@ -26,6 +26,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
+from .channels import ENV_CHANNEL_ID
 from .db import get_db
 from .ingestion import collect_source
 from .material_classification import classify_materials as run_material_classification
@@ -311,9 +312,6 @@ def channel_account_read(account: ChannelAccount) -> ChannelAccountRead:
         capabilities=account.capabilities_json,
         has_credentials=bool(account.encrypted_credentials),
     )
-
-
-ENV_CHANNEL_ID = "env:default"
 
 
 def resolve_channel_account(
@@ -815,6 +813,11 @@ def collect_source_now(
             select(ModelConfig).where(ModelConfig.enabled.is_(True)).order_by(ModelConfig.created_at.desc())
         )
         translation_provider = provider_for(translation_model) if translation_model else None
+        # With BEGIN IMMEDIATE the lookups above already hold the SQLite write
+        # lock. Release it before collect_source performs network fetches so a
+        # slow source request cannot block the worker's writers past
+        # busy_timeout and surface as "database is locked".
+        db.commit()
         items = collect_source(db, source, translation_provider, translation_model)
         db.commit()
     except Exception as exc:
@@ -880,6 +883,10 @@ def classify_materials_now(
     model = db.scalar(
         select(ModelConfig).where(ModelConfig.enabled.is_(True)).order_by(ModelConfig.created_at.desc())
     )
+    # Release the write transaction opened by the lookups above before the
+    # classification model call; otherwise the SQLite write lock is held across
+    # the network request and can time out the worker with "database is locked".
+    db.commit()
     try:
         result = run_material_classification(
             db,
@@ -2577,6 +2584,9 @@ def test_channel_account(
     account = db.get(ChannelAccount, account_id)
     if not account or not account.enabled:
         raise HTTPException(status_code=404, detail="渠道账号不存在或已停用")
+    # Release the read transaction before the network connection test; with
+    # BEGIN IMMEDIATE the lookup already holds the SQLite write lock.
+    db.commit()
     try:
         with wechat_client_for_account(account) as client:
             client.test_connection()
@@ -2616,6 +2626,9 @@ async def upload_wechat_thumb(
     account, _ = resolve_channel_account(db, account_id)
     if account is None and (not settings.wechat_app_id or not settings.wechat_app_secret):
         raise HTTPException(status_code=503, detail="微信公众号凭证未配置")
+    # Release the transaction opened by the account lookup before the network
+    # upload; otherwise the SQLite write lock is held for the whole upload.
+    db.commit()
     try:
         client = wechat_client_for_account(account) if account else WeChatClient.from_settings(settings)
         with client as client:
@@ -2646,6 +2659,7 @@ def get_wechat_draft(
     account, _ = resolve_channel_account(db, account_id)
     if account is None and (not settings.wechat_app_id or not settings.wechat_app_secret):
         raise HTTPException(status_code=503, detail="微信公众号凭证未配置")
+    db.commit()
     try:
         client = wechat_client_for_account(account) if account else WeChatClient.from_settings(settings)
         with client as client:
@@ -2664,6 +2678,7 @@ def get_wechat_publish_status(
     account = db.get(ChannelAccount, account_id)
     if not account or not account.enabled:
         raise HTTPException(status_code=404, detail="渠道账号不存在或已停用")
+    db.commit()
     try:
         with wechat_client_for_account(account) as client:
             return client.get_publish_status(publish_id)

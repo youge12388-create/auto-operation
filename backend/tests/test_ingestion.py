@@ -1,6 +1,8 @@
 import httpx
+import pytest
 from sqlalchemy import select
 
+from content_ops.fetching import FetchedResponse
 from content_ops.ingestion import collect_source, content_hash, normalize_url
 from content_ops.models import MaterialCategory, ModelConfig, Source, SourceItem
 from content_ops.providers import FakeProvider
@@ -146,10 +148,15 @@ def test_rss_entries_without_links_do_not_overwrite_each_other(monkeypatch, db):
         "</channel></rss>"
     ).encode("utf-8")
 
-    def fake_get(url, timeout=None, follow_redirects=None):
-        return httpx.Response(200, request=httpx.Request("GET", str(url)), content=rss_xml)
+    def fake_fetch(url, **kwargs):
+        return FetchedResponse(
+            url=str(url),
+            status_code=200,
+            headers={"content-type": "application/rss+xml"},
+            content=rss_xml,
+        )
 
-    monkeypatch.setattr("content_ops.ingestion.httpx.get", fake_get)
+    monkeypatch.setattr("content_ops.ingestion.fetch_url", fake_fetch)
     source = Source(name="无链接 RSS", source_type="rss", url="https://example.com/feed")
     db.add(source)
     db.commit()
@@ -161,6 +168,28 @@ def test_rss_entries_without_links_do_not_overwrite_each_other(monkeypatch, db):
     # the second one overwriting the first via the shared source-URL canonical.
     assert len(items) == 2
     assert {item.title for item in items} == {"第一", "第二"}
+
+
+def test_empty_rss_is_reported_as_collection_failure(monkeypatch, db):
+    def fake_fetch(url, **kwargs):
+        return FetchedResponse(
+            url=str(url),
+            status_code=200,
+            headers={"content-type": "application/rss+xml"},
+            content=b"<rss><channel><title>empty</title></channel></rss>",
+        )
+
+    monkeypatch.setattr("content_ops.ingestion.fetch_url", fake_fetch)
+    source = Source(name="empty RSS", source_type="rss", url="https://example.com/empty-feed")
+    db.add(source)
+    db.commit()
+
+    with pytest.raises(ValueError, match="RSS 信息源没有可用条目"):
+        collect_source(db, source)
+
+    db.refresh(source)
+    assert source.last_error == "RSS 信息源没有可用条目"
+    assert source.last_success_at is None
 
 
 def test_aihot_items_without_links_do_not_overwrite_each_other(monkeypatch, db):

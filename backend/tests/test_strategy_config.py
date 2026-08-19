@@ -2,6 +2,7 @@ from fastapi import BackgroundTasks
 from sqlalchemy import select
 
 from content_ops.api import add_revision, archive_article, review_article
+from content_ops.channels import ENV_CHANNEL_ID
 from content_ops.models import (
     Article,
     ArticleRevision,
@@ -16,7 +17,12 @@ from content_ops.models import (
 from content_ops.providers import FakeProvider
 from content_ops.schemas import ArticleRevisionCreate, ReviewCreate
 from content_ops.security import hash_password
-from content_ops.strategy_config import StrategyConfigError, skill_for_stage, validate_strategy_config
+from content_ops.strategy_config import (
+    StrategyConfigError,
+    skill_for_stage,
+    validate_strategy_config,
+    validate_strategy_references,
+)
 from content_ops.workflow import create_job, run_job
 
 
@@ -65,6 +71,31 @@ def test_local_draft_discards_irrelevant_wechat_delivery_fields():
 
     assert configured["channel_account_id"] is None
     assert configured["wechat_thumb_media_id"] is None
+
+
+def test_environment_channel_is_valid_for_automatic_draft_but_not_publish(db):
+    configured = validate_strategy_config(
+        {
+            "delivery_mode": "wechat_draft",
+            "channel_account_id": ENV_CHANNEL_ID,
+            "wechat_thumb_media_id": "environment-thumb",
+        }
+    )
+    validate_strategy_references(db, configured)
+
+    publish_config = validate_strategy_config(
+        {
+            "delivery_mode": "auto_publish",
+            "channel_account_id": ENV_CHANNEL_ID,
+            "wechat_thumb_media_id": "environment-thumb",
+        }
+    )
+    try:
+        validate_strategy_references(db, publish_config)
+    except StrategyConfigError as exc:
+        assert "只有草稿权限" in str(exc)
+    else:
+        raise AssertionError("the environment channel must never gain publish capability")
 
 def test_workflow_applies_stage_models_skills_and_optional_steps(db):
     writing_model = ModelConfig(provider="fake", name="writing-fake")

@@ -1,9 +1,11 @@
 from datetime import datetime, timezone
+from types import SimpleNamespace
 
 from sqlalchemy import select
 
 from content_ops.api import add_strategy, update_strategy
-from content_ops.models import Article, Job, ModelConfig, Source, Strategy, StrategyVersion
+from content_ops.channels import ENV_CHANNEL_ID
+from content_ops.models import Article, Job, ModelConfig, Publication, Source, Strategy, StrategyVersion
 from content_ops.providers import FakeProvider
 from content_ops.scheduler import enqueue_due_jobs, normalize_schedule, schedule_window
 from content_ops.schemas import StrategyCreate
@@ -114,3 +116,58 @@ def test_strategy_updates_create_immutable_versions(db):
         (1, "first", "daily"),
         (2, "second", "hourly"),
     ]
+
+
+def test_scheduled_automatic_draft_uses_environment_channel(monkeypatch, db):
+    source = Source(
+        name="scheduled-wechat-source",
+        source_type="manual",
+        url="https://example.com/scheduled-wechat",
+        config_json={"title": "Scheduled draft", "content": "A scheduled draft source."},
+    )
+    db.add(source)
+    db.commit()
+    add_strategy(
+        StrategyCreate(
+            name="scheduled-wechat-draft",
+            objective="create a WeChat draft automatically",
+            schedule="daily",
+            enabled=True,
+            config={
+                "source_ids": [],
+                "delivery_mode": "wechat_draft",
+                "channel_account_id": ENV_CHANNEL_ID,
+                "wechat_thumb_media_id": "scheduled-thumb",
+                "review_rules": {"human_review_required": False},
+            },
+        ),
+        None,
+        db,
+    )
+    created: list[str] = []
+
+    class FakeClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return None
+
+        def create_draft(self, **_):
+            created.append("draft")
+            return SimpleNamespace(media_id="scheduled-draft")
+
+    monkeypatch.setattr("content_ops.delivery.WeChatClient.from_settings", lambda _: FakeClient())
+
+    jobs = enqueue_due_jobs(db, datetime(2026, 7, 27, 8, 30, tzinfo=timezone.utc))
+    result = run_job(db, jobs[0].id, FakeProvider())
+    article = db.scalar(select(Article).where(Article.job_id == jobs[0].id))
+
+    assert result.status == "succeeded"
+    assert article is not None
+    publication = db.scalar(select(Publication).where(Publication.article_revision_id == article.revisions[0].id))
+    assert article.status == "wechat_draft"
+    assert publication is not None
+    assert publication.channel_account_id == ENV_CHANNEL_ID
+    assert publication.remote_id == "scheduled-draft"
+    assert created == ["draft"]

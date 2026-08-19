@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .channels import ENV_CHANNEL_ID
 from .models import Article, ArticleRevision, ChannelAccount, Publication, Theme
 from .security import decrypt_secret
 from .settings import get_settings
@@ -36,6 +37,17 @@ def wechat_client_for_account(account: ChannelAccount) -> WeChatClient:
     if not app_id or not app_secret:
         raise ValueError("公众号账号凭证不完整")
     return WeChatClient(app_id, app_secret)
+
+
+def _wechat_client_for_delivery(
+    account_id: str,
+    account: ChannelAccount | None,
+) -> WeChatClient:
+    if account_id == ENV_CHANNEL_ID:
+        return WeChatClient.from_settings(get_settings())
+    if account is None:
+        raise ValueError("公众号账号不存在或已停用")
+    return wechat_client_for_account(account)
 
 
 def _mark_delivery_error(publication: Publication, exc: Exception) -> None:
@@ -72,10 +84,11 @@ def _ensure_wechat_draft(
     db: Session,
     article: Article,
     revision: ArticleRevision,
-    account: ChannelAccount,
+    account_id: str,
+    account: ChannelAccount | None,
     config: dict[str, Any],
 ) -> Publication:
-    key = f"{revision.id}:{account.id}:create_draft"
+    key = f"{revision.id}:{account_id}:create_draft"
     publication = db.scalar(select(Publication).where(Publication.idempotency_key == key))
     if publication is not None and publication.status == "succeeded" and publication.remote_id:
         article.status = "wechat_draft"
@@ -85,7 +98,7 @@ def _ensure_wechat_draft(
     if publication is None:
         publication = Publication(
             article_revision_id=revision.id,
-            channel_account_id=account.id,
+            channel_account_id=account_id,
             action="create_draft",
             status="running",
             idempotency_key=key,
@@ -99,7 +112,7 @@ def _ensure_wechat_draft(
 
     channel_html, theme_snapshot = _channel_html(db, article, revision, config.get("theme_id"))
     try:
-        with wechat_client_for_account(account) as client:
+        with _wechat_client_for_delivery(account_id, account) as client:
             result = client.create_draft(
                 title=article.title,
                 content_html=channel_html,
@@ -184,12 +197,16 @@ def deliver_article(
         db.flush()
         return DeliveryResult(mode=mode, status="succeeded")
     account_id = config.get("channel_account_id")
-    account = db.get(ChannelAccount, account_id) if isinstance(account_id, str) else None
-    if account is None or not account.enabled:
+    if not isinstance(account_id, str) or not account_id:
+        raise ValueError("自动交付必须配置公众号账号")
+    account = None if account_id == ENV_CHANNEL_ID else db.get(ChannelAccount, account_id)
+    if account_id != ENV_CHANNEL_ID and (account is None or not account.enabled):
         raise ValueError("自动交付配置的公众号账号不存在或已停用")
+    if mode == "auto_publish" and account is None:
+        raise ValueError("环境默认公众号只有草稿权限，不能用于自动正式发布")
     if ensure_active is not None:
         ensure_active()
-    draft = _ensure_wechat_draft(db, article, revision, account, config)
+    draft = _ensure_wechat_draft(db, article, revision, account_id, account, config)
     if mode == "wechat_draft":
         return DeliveryResult(
             mode=mode,

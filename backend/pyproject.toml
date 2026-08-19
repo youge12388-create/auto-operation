@@ -11,6 +11,7 @@ dependencies = [
   "alembic>=1.14,<2",
   "argon2-cffi>=23.1,<24",
   "cryptography>=42,<45",
+  "crawlee>=1.9,<2",
   "fastapi>=0.115,<1",
   "feedparser>=6,<7",
   "httpx>=0.27,<1",

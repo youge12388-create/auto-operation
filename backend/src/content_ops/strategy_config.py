@@ -4,6 +4,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from .channels import ENV_CHANNEL_ID
 from .models import ChannelAccount, MaterialCategory, ModelConfig, Skill, Source, Strategy, Theme
 
 OPTIONAL_STEPS = frozenset({"style", "rewrite"})
@@ -169,15 +170,19 @@ def validate_strategy_references(db: Session, config: dict[str, Any]) -> None:
 
     channel_account_id = config.get("channel_account_id")
     if config.get("delivery_mode") in {"wechat_draft", "auto_publish"} and channel_account_id:
-        channel_account = db.get(ChannelAccount, channel_account_id)
-        if channel_account is None:
-            raise StrategyConfigError(f"发布账号不存在：{channel_account_id}")
-        if not channel_account.enabled:
-            raise StrategyConfigError(f"发布账号已停用：{channel_account_id}")
-        if config.get("delivery_mode") == "auto_publish" and not (
-            channel_account.capabilities_json or {}
-        ).get("publish"):
-            raise StrategyConfigError("所选公众号账号没有自动发布权限")
+        if channel_account_id == ENV_CHANNEL_ID:
+            if config.get("delivery_mode") == "auto_publish":
+                raise StrategyConfigError("环境默认公众号只有草稿权限，不能用于自动正式发布")
+        else:
+            channel_account = db.get(ChannelAccount, channel_account_id)
+            if channel_account is None:
+                raise StrategyConfigError(f"发布账号不存在：{channel_account_id}")
+            if not channel_account.enabled:
+                raise StrategyConfigError(f"发布账号已停用：{channel_account_id}")
+            if config.get("delivery_mode") == "auto_publish" and not (
+                channel_account.capabilities_json or {}
+            ).get("publish"):
+                raise StrategyConfigError("所选公众号账号没有自动发布权限")
 
     theme_id = config.get("theme_id")
     if theme_id:

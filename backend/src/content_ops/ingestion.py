@@ -11,6 +11,7 @@ import trafilatura
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from .fetching import fetch_url
 from .material_classification import classify_materials
 from .models import Job, MaterialCategory, ModelConfig, Source, SourceItem
 from .providers import ModelProvider, provider_for
@@ -156,11 +157,14 @@ def collect_source(
                     item.classification_reason = "来自 AI HOT 官方分类"
                 items.append(item)
         else:
-            response = httpx.get(source.url, timeout=30, follow_redirects=True)
-            response.raise_for_status()
+            response = fetch_url(source.url)
             if source.source_type == "rss":
+                parsed_feed = feedparser.parse(response.content)
+                if not parsed_feed.entries:
+                    detail = "；解析器报告异常" if getattr(parsed_feed, "bozo", False) else ""
+                    raise ValueError(f"RSS 信息源没有可用条目{detail}")
                 items = []
-                for entry in feedparser.parse(response.content).entries:
+                for entry in parsed_feed.entries:
                     link = (entry.get("link") or "").strip()
                     content = entry.get("summary") or entry.get("description") or entry.get("title", "")
                     # Entries without a unique link must not all map to the source
@@ -170,7 +174,9 @@ def collect_source(
                     url = link or f"rss://{source.id}/{content_hash(content)}"
                     items.append(_upsert_item(db, source, entry.get("title", ""), url, content))
             else:
-                content = trafilatura.extract(response.text) or response.text[:4000]
+                content = trafilatura.extract(response.text, url=response.url, favor_recall=True)
+                if not content or not content.strip():
+                    raise ValueError("网页正文抽取为空，可能是动态页面或站点返回了空壳 HTML")
                 items = [_upsert_item(db, source, source.name, str(response.url), content)]
         if translate_foreign_sources and any(needs_chinese_translation(item) for item in items):
             # Persist collected items and release the write transaction before the

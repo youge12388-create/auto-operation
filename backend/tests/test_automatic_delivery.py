@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 
+from content_ops.channels import ENV_CHANNEL_ID
 from content_ops.delivery import deliver_article
 from content_ops.models import Article, ArticleRevision, ChannelAccount, Job, Publication, Source, Strategy
 from content_ops.providers import CompletionResponse, FakeProvider
@@ -67,6 +68,79 @@ def test_auto_publish_mode_creates_draft_but_global_stop_blocks_publish(monkeypa
     assert article.status == "wechat_draft"
     assert calls == ["draft"]
     assert db.query(Publication).filter(Publication.action == "publish").count() == 0
+
+
+def test_automatic_draft_uses_environment_channel_credentials(monkeypatch, db):
+    article, revision, _ = delivery_record(db, publish=False)
+    calls: list[str] = []
+
+    class FakeClient:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return None
+
+        def create_draft(self, **_):
+            calls.append("draft")
+            return SimpleNamespace(media_id="environment-draft")
+
+    monkeypatch.setattr(
+        "content_ops.delivery.get_settings",
+        lambda: SimpleNamespace(
+            wechat_app_id="wx-environment",
+            wechat_app_secret="environment-secret",
+            wechat_api_base_url="https://api.weixin.qq.com",
+            wechat_timeout_seconds=30.0,
+        ),
+    )
+    monkeypatch.setattr("content_ops.delivery.WeChatClient.from_settings", lambda _: FakeClient())
+
+    result = deliver_article(
+        db,
+        article,
+        revision,
+        {
+            "delivery_mode": "wechat_draft",
+            "channel_account_id": ENV_CHANNEL_ID,
+            "wechat_thumb_media_id": "thumb-environment",
+        },
+    )
+
+    publication = db.query(Publication).filter(Publication.action == "create_draft").one()
+    assert result.status == "succeeded"
+    assert result.remote_id == "environment-draft"
+    assert publication.channel_account_id == ENV_CHANNEL_ID
+    assert calls == ["draft"]
+
+
+def test_environment_channel_cannot_start_automatic_publish(monkeypatch, db):
+    article, revision, _ = delivery_record(db, publish=False)
+
+    def unexpected_client(_):
+        raise AssertionError("publish must fail before creating a draft")
+
+    monkeypatch.setattr(
+        "content_ops.delivery.WeChatClient.from_settings",
+        unexpected_client,
+    )
+
+    try:
+        deliver_article(
+            db,
+            article,
+            revision,
+            {
+                "delivery_mode": "auto_publish",
+                "channel_account_id": ENV_CHANNEL_ID,
+                "wechat_thumb_media_id": "thumb-environment",
+            },
+        )
+    except ValueError as exc:
+        assert "只有草稿权限" in str(exc)
+    else:
+        raise AssertionError("environment channel must not enter automatic publishing")
+    assert db.query(Publication).count() == 0
 
 
 def test_auto_publish_submits_only_once_when_global_switch_and_account_allow_it(monkeypatch, db):
