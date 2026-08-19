@@ -1,0 +1,102 @@
+name: Deploy to Baota
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: Commit SHA to deploy. Leave empty to deploy the current main tip.
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy exact commit to Baota
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      DEPLOY_SHA: ${{ github.event_name == 'workflow_dispatch' && (inputs.commit_sha || github.sha) || github.event.workflow_run.head_sha }}
+      BAOTA_HOST: ${{ secrets.BAOTA_HOST }}
+      BAOTA_SSH_PORT: ${{ secrets.BAOTA_SSH_PORT }}
+      BAOTA_SSH_USER: ${{ secrets.BAOTA_SSH_USER }}
+      BAOTA_PROJECT_DIR: ${{ secrets.BAOTA_PROJECT_DIR }}
+    steps:
+      - name: Check out exact CI commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+
+      - name: Build frontend release assets
+        working-directory: frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Package exact release
+        env:
+          ARCHIVE_NAME: content-ops-${{ env.DEPLOY_SHA }}.tar.gz
+        run: |
+          set -euo pipefail
+          rm -rf .deploy-staging
+          mkdir -p .deploy-staging
+          git archive --format=tar "$DEPLOY_SHA" | tar -xf - -C .deploy-staging
+          rm -rf .deploy-staging/frontend/node_modules .deploy-staging/frontend/dist
+          cp -a frontend/dist .deploy-staging/frontend-dist
+          tar -czf "$ARCHIVE_NAME" -C .deploy-staging .
+
+      - name: Configure SSH
+        env:
+          BAOTA_SSH_PRIVATE_KEY: ${{ secrets.BAOTA_SSH_PRIVATE_KEY }}
+          BAOTA_KNOWN_HOSTS: ${{ secrets.BAOTA_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$BAOTA_HOST"
+          test -n "$BAOTA_SSH_PORT"
+          test -n "$BAOTA_SSH_USER"
+          test -n "$BAOTA_PROJECT_DIR"
+          test -n "$BAOTA_SSH_PRIVATE_KEY"
+          test -n "$BAOTA_KNOWN_HOSTS"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$BAOTA_SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$BAOTA_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
+
+      - name: Upload release and deploy
+        env:
+          ARCHIVE_NAME: content-ops-${{ env.DEPLOY_SHA }}.tar.gz
+        run: |
+          set -euo pipefail
+          trap 'rm -f "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"' EXIT
+          ssh -p "$BAOTA_SSH_PORT" "$BAOTA_SSH_USER@$BAOTA_HOST" \
+            "mkdir -p '$BAOTA_PROJECT_DIR/incoming'"
+          scp -P "$BAOTA_SSH_PORT" "$ARCHIVE_NAME" \
+            "$BAOTA_SSH_USER@$BAOTA_HOST:$BAOTA_PROJECT_DIR/incoming/$ARCHIVE_NAME"
+          ssh -p "$BAOTA_SSH_PORT" "$BAOTA_SSH_USER@$BAOTA_HOST" \
+            "bash -s -- '$BAOTA_PROJECT_DIR' '$DEPLOY_SHA' '$ARCHIVE_NAME'" \
+            < scripts/deploy-baota.sh
