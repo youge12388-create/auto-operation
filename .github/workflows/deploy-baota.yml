@@ -72,7 +72,7 @@ jobs:
 
       - name: Configure SSH
         env:
-          BAOTA_SSH_PRIVATE_KEY: ${{ secrets.BAOTA_SSH_PRIVATE_KEY }}
+          BAOTA_SSH_PRIVATE_KEY_B64: ${{ secrets.BAOTA_SSH_PRIVATE_KEY_B64 }}
           BAOTA_KNOWN_HOSTS: ${{ secrets.BAOTA_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
@@ -80,11 +80,12 @@ jobs:
           test -n "$BAOTA_SSH_PORT"
           test -n "$BAOTA_SSH_USER"
           test -n "$BAOTA_PROJECT_DIR"
-          test -n "$BAOTA_SSH_PRIVATE_KEY"
+          test -n "$BAOTA_SSH_PRIVATE_KEY_B64"
           test -n "$BAOTA_KNOWN_HOSTS"
           install -d -m 700 "$HOME/.ssh"
-          printf '%s\n' "$BAOTA_SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          printf '%s' "$BAOTA_SSH_PRIVATE_KEY_B64" | base64 --decode > "$HOME/.ssh/id_ed25519"
           printf '%s\n' "$BAOTA_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          test -s "$HOME/.ssh/id_ed25519"
           chmod 600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
 
       - name: Upload release and deploy

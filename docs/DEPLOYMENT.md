@@ -25,9 +25,11 @@ BAOTA_HOST=114.132.180.230
 BAOTA_SSH_PORT=22
 BAOTA_SSH_USER=<部署用户>
 BAOTA_PROJECT_DIR=/opt/content-ops
-BAOTA_SSH_PRIVATE_KEY=<部署用户私钥，整段粘贴>
+BAOTA_SSH_PRIVATE_KEY_B64=<部署用户 OpenSSH 私钥的 base64 单行编码>
 BAOTA_KNOWN_HOSTS=<服务器 SSH 主机公钥，整行粘贴>
 ```
+
+`BAOTA_SSH_PRIVATE_KEY_B64` 使用 OpenSSH 私钥的单行 base64 编码，Actions 运行时解码到临时目录，避免多行 Secret 在表单或 runner 链路中发生换行格式损坏。
 
 不要把私钥、服务器 `.env` 或数据库文件提交到仓库。生产环境建议使用专用部署用户，仅授予执行发布脚本和重启两个 systemd 服务的权限；不要长期使用 root 私钥。
 
