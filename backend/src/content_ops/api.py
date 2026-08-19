@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import re
 import time
 from datetime import datetime, timezone
@@ -156,6 +157,7 @@ from .wechat import WeChatAPIError, WeChatClient
 from .workflow import create_job
 
 app = FastAPI(title="AI 自动内容运营系统", version="0.1.0")
+logger = logging.getLogger(__name__)
 
 
 def wechat_error_detail(exc: WeChatAPIError) -> str:
@@ -1281,6 +1283,7 @@ def add_strategy(
         strategy_config = validate_strategy_definition(payload.config)
         validate_strategy_definition_references(db, strategy_config)
     except (StrategyConfigError, ValueError) as exc:
+        logger.warning("strategy validation failed action=add name=%r reason=%s", payload.name, exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     strategy = Strategy(
         name=payload.name,
@@ -1324,6 +1327,7 @@ def update_strategy(
         schedule = normalize_schedule(payload.schedule)
         validate_strategy_definition_references(db, strategy_config)
     except (StrategyConfigError, ValueError) as exc:
+        logger.warning("strategy validation failed action=update strategy_id=%s reason=%s", strategy_id, exc)
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     strategy.name = payload.name
     strategy.objective = payload.objective
@@ -1378,6 +1382,12 @@ def scan_strategy_for_topics(
             runtime_snapshot_extra={"topic_algorithm": topic_algorithm_snapshot(algorithm)},
         )
     except StrategyConfigError as exc:
+        logger.warning(
+            "strategy validation failed action=scan strategy_id=%s topic_algorithm_id=%s reason=%s",
+            strategy_id,
+            payload.topic_algorithm_id if payload else None,
+            exc,
+        )
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except OperationalError as exc:
         raise_job_schema_error(exc)
@@ -1406,6 +1416,12 @@ def run_strategy(
             combination_id=payload.combination_id if payload else None,
         )
     except StrategyConfigError as exc:
+        logger.warning(
+            "strategy validation failed action=run strategy_id=%s combination_id=%s reason=%s",
+            strategy_id,
+            payload.combination_id if payload else None,
+            exc,
+        )
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except OperationalError as exc:
         raise_job_schema_error(exc)

@@ -118,15 +118,27 @@ def test_http_scheduler_worker_automatic_wechat_draft_e2e(tmp_path, monkeypatch)
                 json={
                     "name": "e2e-automatic-draft",
                     "objective": "Validate the complete scheduled draft workflow",
-                    "schedule": "daily",
+                    "schedule": "daily@09:00",
+                    "automation_level": "L2",
                     "enabled": True,
                     "config": {
-                        "source_ids": [source_id],
-                        "default_model_id": model_id,
-                        "delivery_mode": "wechat_draft",
-                        "channel_account_id": ENV_CHANNEL_ID,
-                        "wechat_thumb_media_id": "e2e-thumb-media-id",
-                        "review_rules": {"human_review_required": False},
+                        "selection_mode": "fixed",
+                        "default_combination_id": "draft",
+                        "strategy_combinations": [
+                            {
+                                "id": "draft",
+                                "name": "自动草稿组合",
+                                "enabled": True,
+                                "config": {
+                                    "source_ids": [source_id],
+                                    "model_by_stage": {"writing": model_id},
+                                    "delivery_mode": "wechat_draft",
+                                    "channel_account_id": ENV_CHANNEL_ID,
+                                    "wechat_thumb_media_id": "e2e-thumb-media-id",
+                                    "review_rules": {"human_review_required": False},
+                                },
+                            }
+                        ],
                     },
                 },
             )

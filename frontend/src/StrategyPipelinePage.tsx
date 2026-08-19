@@ -347,9 +347,16 @@ export function StrategyPipelinePage(props: Props) {
     setBusy(run ?? "save");
     try {
       const saved = await props.onSave(current?.id, payload());
-      if (run) await props.onRun(saved.id, run === "current" ? active?.id : undefined);
+      if (!run) return;
+      try {
+        await props.onRun(saved.id, run === "current" ? active?.id : undefined);
+      } catch (cause) {
+        const detail = cause instanceof Error && cause.message ? cause.message : TEXT.unsaved;
+        setError(`生产线已保存，但${run === "current" ? "当前组合" : "自动规则"}试跑失败：${detail}`);
+      }
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : TEXT.unsaved);
+      const detail = cause instanceof Error && cause.message ? cause.message : TEXT.unsaved;
+      setError(`生产线保存失败：${detail}`);
     } finally {
       setBusy(null);
     }

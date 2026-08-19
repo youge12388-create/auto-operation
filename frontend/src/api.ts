@@ -317,6 +317,28 @@ export type Dashboard = {
   articles: number;
 };
 
+export class ApiRequestError extends Error {
+  readonly status: number;
+  readonly path: string;
+
+  constructor(path: string, status: number, message: string) {
+    super(message);
+    this.name = "ApiRequestError";
+    this.status = status;
+    this.path = path;
+  }
+}
+
+function formatApiDetail(detail: unknown): string | undefined {
+  if (typeof detail === "string" && detail.trim()) return detail.trim();
+  if (!Array.isArray(detail)) return undefined;
+  const messages = detail
+    .map((item) => (item && typeof item === "object" && "msg" in item ? (item as { msg?: unknown }).msg : undefined))
+    .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    .map((item) => item.trim());
+  return messages.length ? messages.join("；") : undefined;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     credentials: "include",
@@ -324,14 +346,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     ...init,
   });
   if (!response.ok) {
-    let detail = "请求失败";
+    const statusMessage = `请求失败（HTTP ${response.status}）`;
+    let detail: string | undefined;
     try {
-      const body = await response.json() as { detail?: string };
-      detail = body.detail || detail;
+      const raw = await response.text();
+      const body = JSON.parse(raw) as { detail?: unknown };
+      detail = formatApiDetail(body.detail);
     } catch {
-      // Keep the stable fallback for non-JSON proxy errors.
+      // Non-JSON proxy errors still expose the HTTP status to the operator.
     }
-    throw new Error(detail);
+    throw new ApiRequestError(path, response.status, detail ? `${statusMessage}：${detail}` : statusMessage);
   }
   return response.json() as Promise<T>;
 }

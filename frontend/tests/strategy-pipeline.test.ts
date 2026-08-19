@@ -75,6 +75,22 @@ describe("strategy combination contracts", () => {
       expect.objectContaining({ method: "POST", body: undefined }),
     );
   });
+  it("keeps the HTTP status and backend validation detail visible", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      text: async () => JSON.stringify({ detail: "微信公众号交付模式必须配置默认封面素材 ID" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(api.updateStrategy("strategy-1", {
+      name: "pipeline",
+      objective: "draft",
+      schedule: "manual",
+      automation_level: "L2",
+      config: {},
+    })).rejects.toThrow("请求失败（HTTP 400）：微信公众号交付模式必须配置默认封面素材 ID");
+  });
   it("archives an article through a recoverable delete contract", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
