@@ -153,6 +153,48 @@ BUILTIN_THEME_SPECS = (
         },
         css=".wx-theme-aws-minimal-black{background:#fff;color:#333;}",
     ),
+    ThemeSpec(
+        name="编辑留白",
+        slug="editorial-notes",
+        description="编辑式长文：首段导语、舒展正文、无营销标签的章节锚点，适合观点、叙事和深度复盘。",
+        tokens={
+            "surface": "#FFFEFA",
+            "text": "#2D2A26",
+            "accent": "#B34A31",
+            "muted": "#A89F94",
+            "font": _SANS,
+            "serif": _SERIF,
+        },
+        css=".wx-theme-editorial-notes{background:#fffefa;color:#2d2a26;}",
+    ),
+    ThemeSpec(
+        name="编辑留白 · 案例复盘",
+        slug="editorial-casebook",
+        description="案例复盘版：强调观察、转折和结论的层次，适合项目实践、增长复盘与经验沉淀。",
+        tokens={
+            "surface": "#FFFDF9",
+            "text": "#302C28",
+            "accent": "#8E4A3C",
+            "muted": "#A99E94",
+            "font": _SANS,
+            "serif": _SERIF,
+        },
+        css=".wx-theme-editorial-casebook{background:#fffdf9;color:#302c28;}",
+    ),
+    ThemeSpec(
+        name="编辑留白 · 方法清单",
+        slug="editorial-playbook",
+        description="方法清单版：用真实步骤锚点组织阅读，适合教程、指南、流程与工具方法。",
+        tokens={
+            "surface": "#FCFDFC",
+            "text": "#263542",
+            "accent": "#315B71",
+            "muted": "#AAB7BD",
+            "font": _SANS,
+            "serif": _SERIF,
+        },
+        css=".wx-theme-editorial-playbook{background:#fcfdfc;color:#263542;}",
+    ),
 )
 
 
@@ -227,6 +269,27 @@ INLINE_STYLE_PRESETS: dict[str, dict[str, str]] = {
         "code": "color:#18181B;background:#F4F4F5;padding:2px 6px;border-radius:2px;font-size:90%;",
         "a": "color:#18181B;text-decoration:underline;text-underline-offset:3px;",
         "em": "font-style:italic;color:#666;",
+    },
+    "editorial-notes": {
+        "article": f"background:#FFFEFA;color:#2D2A26;font-family:{_SANS};font-size:16px;line-height:1.95;letter-spacing:0.45px;max-width:677px;margin:0 auto;padding:8px 20px 34px;",
+        "strong": "color:#2D2A26;font-weight:700;background:linear-gradient(transparent 64%,#F3DDD1 0);",
+        "code": "padding:1px 5px;background:#F3EEE8;color:#7D3828;font-family:'SF Mono',Consolas,Monaco,monospace;font-size:13px;",
+        "a": "color:#8E3E2B;text-decoration:none;border-bottom:1px solid #D8AD9F;",
+        "em": "color:#6B625A;font-style:italic;",
+    },
+    "editorial-casebook": {
+        "article": f"background:#FFFDF9;color:#302C28;font-family:{_SANS};font-size:16px;line-height:1.95;letter-spacing:0.4px;max-width:677px;margin:0 auto;padding:10px 20px 34px;",
+        "strong": "color:#5F3027;font-weight:700;background:linear-gradient(transparent 66%,#F0D8CF 0);",
+        "code": "padding:1px 5px;background:#F5EEEA;color:#6B3429;font-family:'SF Mono',Consolas,Monaco,monospace;font-size:13px;",
+        "a": "color:#7D4033;text-decoration:none;border-bottom:1px solid #D8B7AC;",
+        "em": "color:#6D625B;font-style:italic;",
+    },
+    "editorial-playbook": {
+        "article": f"background:#FCFDFC;color:#263542;font-family:{_SANS};font-size:16px;line-height:1.9;letter-spacing:0.35px;max-width:677px;margin:0 auto;padding:10px 20px 34px;",
+        "strong": "color:#263542;font-weight:700;background:linear-gradient(transparent 66%,#D6E7ED 0);",
+        "code": "padding:1px 5px;background:#EEF4F5;color:#284E60;font-family:'SF Mono',Consolas,Monaco,monospace;font-size:13px;",
+        "a": "color:#315B71;text-decoration:none;border-bottom:1px solid #A9C6D1;",
+        "em": "color:#52636C;font-style:italic;",
     },
 }
 
@@ -362,6 +425,52 @@ COMPONENT_PRESETS: dict[str, dict[str, str]] = {
         "divider": '<section style="width:24px;height:1px;background:#18181B;margin:2.5em auto;"><br></section>',
         "ending": '',
     },
+    "editorial-notes": {
+        "cover": '<section style="margin:0 0 30px;padding:8px 0 22px;border-bottom:1px solid #D8CDC1;"><section style="width:34px;height:3px;background:#B34A31;margin:0 0 18px;"><span><br></span></section><h1 style="margin:0;font-family:{serif};font-size:27px;font-weight:700;line-height:1.42;letter-spacing:0.3px;color:#2D2A26;">{title}</h1></section>',
+        "opening": '<p style="margin:0 0 28px;font-family:{serif};font-size:18px;line-height:1.92;letter-spacing:0.35px;color:#514942;">{content}</p>',
+        "section_title": '<section style="margin:42px 0 18px;padding:0 0 11px;border-bottom:1px solid #E5DDD4;"><h2 style="margin:0;padding-left:11px;border-left:3px solid #B34A31;font-size:19px;font-weight:700;line-height:1.55;letter-spacing:0.2px;color:#2D2A26;">{title}</h2></section>',
+        "subsection_title": '<h3 style="margin:30px 0 12px;font-size:16px;font-weight:700;line-height:1.65;color:#403A35;">{title}</h3>',
+        "minor_title": '<h4 style="margin:22px 0 8px;font-size:15px;font-weight:700;line-height:1.6;color:#514942;">{title}</h4>',
+        "paragraph": '<p style="margin:0 0 18px;font-size:16px;line-height:1.95;letter-spacing:0.45px;text-align:justify;text-indent:2em;color:#2D2A26;">{content}</p>',
+        "bullet_list": '<section style="margin:0 0 22px;padding:2px 0 2px 16px;border-left:1px solid #D8CDC1;"><ul style="margin:0;padding-left:19px;">{items}</ul></section>',
+        "bullet_item": '<li style="margin:0 0 9px;font-size:16px;line-height:1.85;color:#2D2A26;">{content}</li>',
+        "ordered_list": '<ol style="margin:0 0 22px;padding-left:25px;">{items}</ol>',
+        "ordered_item": '<li style="margin:0 0 9px;padding-left:3px;font-size:16px;line-height:1.85;color:#2D2A26;">{content}</li>',
+        "quote": '<blockquote style="margin:28px 0;padding:3px 0 3px 16px;border-left:3px solid #C77B65;color:#635A53;font-family:{serif};font-size:17px;line-height:1.9;letter-spacing:0.2px;">{content}</blockquote>',
+        "code_block": '<section style="margin:0 0 22px;padding:14px 16px;background:#2D2A26;overflow-x:auto;"><section style="margin:0 0 8px;font-size:11px;letter-spacing:1.5px;color:#DAB4A7;">{lang}</section>{code}</section>',
+        "code_line": '<p style="margin:0;font-family:\'SF Mono\',Consolas,Monaco,monospace;font-size:13px;line-height:1.7;color:#F8F2EB;">{code}</p>',
+        "image": '<section style="margin:0 0 22px;"><img src="{src}" alt="{alt}" style="max-width:100%;height:auto;display:block;margin:0 auto;"></section>',
+        "divider": '<section style="width:32px;height:1px;background:#B34A31;margin:34px auto;"><span><br></span></section>',
+        "ending": '',
+    },
+    "editorial-casebook": {
+        "cover": '<section style="margin:0 0 28px;padding:10px 0 21px;border-top:4px solid #8E4A3C;border-bottom:1px solid #DDD2C8;"><h1 style="margin:0;font-family:{serif};font-size:26px;font-weight:700;line-height:1.45;color:#302C28;">{title}</h1></section>',
+        "opening": '<p style="margin:0 0 28px;padding-left:14px;border-left:2px solid #C89586;font-family:{serif};font-size:18px;line-height:1.9;color:#554C46;">{content}</p>',
+        "section_title": '<section style="margin:40px 0 17px;padding:0 0 10px;border-bottom:1px solid #E7DDD5;"><h2 style="margin:0;font-size:19px;font-weight:700;line-height:1.55;color:#302C28;">{title}</h2></section>',
+        "subsection_title": '<h3 style="margin:28px 0 11px;padding-left:10px;border-left:2px solid #C89586;font-size:16px;font-weight:700;line-height:1.65;color:#473D37;">{title}</h3>',
+        "paragraph": '<p style="margin:0 0 18px;font-size:16px;line-height:1.95;text-align:justify;text-indent:2em;color:#302C28;">{content}</p>',
+        "bullet_list": '<ul style="margin:0 0 22px;padding-left:23px;">{items}</ul>',
+        "bullet_item": '<li style="margin:0 0 9px;font-size:16px;line-height:1.85;color:#302C28;">{content}</li>',
+        "ordered_list": '<ol style="margin:0 0 22px;padding-left:25px;">{items}</ol>',
+        "ordered_item": '<li style="margin:0 0 9px;font-size:16px;line-height:1.85;color:#302C28;">{content}</li>',
+        "quote": '<blockquote style="margin:28px 0;padding:14px 16px;background:#F5EEEA;border-left:3px solid #8E4A3C;color:#635851;font-family:{serif};font-size:17px;line-height:1.85;">{content}</blockquote>',
+        "divider": '<section style="width:100%;height:1px;background:#E0D4CB;margin:32px 0;"><span><br></span></section>',
+        "ending": '',
+    },
+    "editorial-playbook": {
+        "cover": '<section style="margin:0 0 30px;padding:8px 0 21px;border-bottom:1px solid #C9D5D9;"><section style="width:30px;height:3px;background:#315B71;margin:0 0 17px;"><span><br></span></section><h1 style="margin:0;font-family:{serif};font-size:26px;font-weight:700;line-height:1.42;color:#263542;">{title}</h1></section>',
+        "opening": '<p style="margin:0 0 27px;font-family:{serif};font-size:18px;line-height:1.9;color:#425661;">{content}</p>',
+        "section_title": '<section style="display:flex;align-items:baseline;margin:38px 0 17px;padding:0 0 11px;border-bottom:1px solid #D7E0E3;"><span style="margin-right:10px;font-size:12px;font-weight:700;letter-spacing:1px;color:#315B71;">{num}</span><h2 style="margin:0;font-size:19px;font-weight:700;line-height:1.55;color:#263542;">{title}</h2></section>',
+        "subsection_title": '<h3 style="margin:28px 0 11px;font-size:16px;font-weight:700;line-height:1.65;color:#2C4958;">{title}</h3>',
+        "paragraph": '<p style="margin:0 0 17px;font-size:16px;line-height:1.9;text-align:justify;color:#263542;">{content}</p>',
+        "bullet_list": '<section style="margin:0 0 22px;padding:3px 0 3px 15px;border-left:2px solid #B7CCD4;"><ul style="margin:0;padding-left:18px;">{items}</ul></section>',
+        "bullet_item": '<li style="margin:0 0 9px;font-size:16px;line-height:1.82;color:#263542;">{content}</li>',
+        "ordered_list": '<ol style="margin:0 0 22px;padding-left:25px;">{items}</ol>',
+        "ordered_item": '<li style="margin:0 0 9px;padding-left:3px;font-size:16px;font-weight:600;line-height:1.82;color:#263542;">{content}</li>',
+        "quote": '<blockquote style="margin:28px 0;padding:3px 0 3px 15px;border-left:3px solid #315B71;color:#4C626C;font-family:{serif};font-size:17px;line-height:1.85;">{content}</blockquote>',
+        "divider": '<section style="width:30px;height:2px;background:#315B71;margin:32px 0;"><span><br></span></section>',
+        "ending": '',
+    },
 }
 
 
@@ -390,7 +499,7 @@ def _inner_html(el, inline: dict[str, str], p_style: str = "") -> str:
             node.set("style", f"{p_style}{existing}" if existing else p_style)
     parts = [html_lib.escape(el.text or "", quote=False)]
     for child in el:
-        parts.append(lxml_html.tostring(child, encoding="unicode", method="html"))
+        parts.append(lxml_html.tostring(child, encoding="unicode", method="html", with_tail=False))
         parts.append(html_lib.escape(child.tail or "", quote=False))
     return "".join(parts)
 
@@ -415,6 +524,25 @@ def _table_html(el, vars_: dict[str, str]) -> str:
     tbody = f"<tbody>{''.join(rows)}</tbody>" if rows else ""
     return f'<table style="width:100%;border-collapse:collapse;margin:0 0 20px;font-size:14px;">{thead}{tbody}</table>'
 
+
+def recommend_editorial_theme(title: str, outline: Any, content_markdown: str) -> tuple[str, str]:
+    """Choose an editorial layout from explicit content signals; never randomize a published article."""
+    title_text = title or ""
+    body_text = f"{outline or ''}\n{content_markdown or ''}"
+    playbook_terms = ("如何", "怎么", "步骤", "方法", "教程", "指南", "清单", "流程", "操作", "工具")
+    casebook_terms = ("案例", "复盘", "项目", "实践", "客户", "增长", "结果", "问题", "踩坑", "实验")
+    playbook_score = 2 * sum(title_text.count(term) for term in playbook_terms) + sum(
+        body_text.count(term) for term in playbook_terms
+    )
+    casebook_score = 2 * sum(title_text.count(term) for term in casebook_terms) + sum(
+        body_text.count(term) for term in casebook_terms
+    )
+    section_count = content_markdown.count("\n## ")
+    if playbook_score >= 3 or (playbook_score >= 2 and section_count >= 3):
+        return "editorial-playbook", "检测到步骤、方法或清单结构"
+    if casebook_score >= 3 or (casebook_score >= 2 and section_count >= 3):
+        return "editorial-casebook", "检测到案例、复盘或结果结构"
+    return "editorial-notes", "默认使用观点长文结构"
 
 def _components_for(theme: Theme, version: ThemeVersion) -> dict[str, str]:
     tokens = version.tokens_json or {}
@@ -503,11 +631,14 @@ def render_with_theme(content_markdown: str, theme: Theme, version: ThemeVersion
     vars_ = _tokens_for(theme, version)
     parts: list[str] = []
     section_no = 0
+    opening_available = True
     has_h1 = any(el.tag == "h1" for el in root)
     if title and not has_h1:
         parts.append(_fill(comps.get("cover", DEFAULT_COMPONENTS["cover"]), vars_, title=html_lib.escape(title, quote=False)))  # noqa: E501
     for el in list(root):
         tag = el.tag
+        if tag in {"h2", "h3", "h4", "blockquote", "ul", "ol", "pre", "table", "img", "hr"}:
+            opening_available = False
         if tag == "h1":
             parts.append(_fill(comps.get("cover", DEFAULT_COMPONENTS["cover"]), vars_, title=_inner_html(el, inline)))
         elif tag == "h2":
@@ -575,7 +706,9 @@ def render_with_theme(content_markdown: str, theme: Theme, version: ThemeVersion
                     _fill(comps.get("image", DEFAULT_COMPONENTS["image"]), vars_, src=imgs[0].get("src", ""), alt=imgs[0].get("alt", ""))  # noqa: E501
                 )
             else:
-                parts.append(_fill(comps.get("paragraph", DEFAULT_COMPONENTS["paragraph"]), vars_, content=_inner_html(el, inline)))  # noqa: E501
+                component_name = "opening" if opening_available and comps.get("opening") else "paragraph"
+                parts.append(_fill(comps.get(component_name, DEFAULT_COMPONENTS["paragraph"]), vars_, content=_inner_html(el, inline)))  # noqa: E501
+                opening_available = False
         else:
             parts.append(lxml_html.tostring(el, encoding="unicode", method="html"))
     ending = comps.get("ending", DEFAULT_COMPONENTS["ending"])

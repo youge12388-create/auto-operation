@@ -1,4 +1,4 @@
-﻿import { buildChannelTestPath, buildWechatThumbPath, type WechatDraftPayload } from "./contracts";
+import { buildChannelTestPath, buildWechatThumbPath, type WechatDraftPayload } from "./contracts";
 export type User = {
   id: string;
   email: string;
@@ -91,6 +91,7 @@ export type StrategyConfig = {
   only_fans_can_comment?: boolean;
   theme_id?: string;
   theme_version?: number;
+  theme_selection_mode?: "auto" | "manual";
   model_by_stage?: Record<string, string>;
   skill_by_stage?: Record<string, string>;
   skill_ids?: string[];

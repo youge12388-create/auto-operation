@@ -45,7 +45,7 @@ from .strategy_config import (
     skill_snapshot,
     validate_strategy_config,
 )
-from .themes import extract_html, layout_instruction, render_revision, validate_gzh_html
+from .themes import extract_html, layout_instruction, recommend_editorial_theme, render_revision, validate_gzh_html
 from .topic_recommendations import recommend_topics
 
 REQUIRED_AI_REVIEW_CHECKS = frozenset(
@@ -436,6 +436,12 @@ def _require_article_body(content: str, stage: str) -> str:
         if len(body) < 300:
             raise ValueError(f"{stage} 阶段返回了质检内容（{marker}），不是文章正文")
     return _TRAILING_BYLINE_AND_CONTACT.sub("", body).rstrip()
+
+def _require_outline(content: str) -> str:
+    outline = content.strip()
+    if len(outline) < 80:
+        raise ValueError("大纲阶段没有生成足够完整的文章蓝图")
+    return outline
 
 
 def _ensure_wechat_structure(content: str) -> str:
@@ -947,12 +953,50 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
         return {**result, "evidence_package_id": package.id}
 
     evidence_output = _run_step(db, job, "evidence", evidence)
-    outline_output = _run_step(
-        db,
-        job,
-        "outline",
-        lambda: {"outline": ["发生了什么", "实际影响", "注意事项"]},
-    )
+    outline_skill = skill_for_stage_config(db, strategy_config, "outline")
+    if outline_skill is None:
+        outline_output = _run_step(
+            db,
+            job,
+            "outline",
+            lambda: {"outline": ["发生了什么", "实际影响", "注意事项"]},
+        )
+    else:
+        outline_output = _run_step(
+            db,
+            job,
+            "outline",
+            lambda: {
+                "outline": _require_outline(
+                    _complete_with_log(
+                        db,
+                        job,
+                        article,
+                        stage_provider("outline"),
+                        CompletionRequest(
+                            system=(
+                                "你是事实优先的公众号选题策划编辑。只能使用事实包中的信息，"
+                                "为已选主题输出可直接交给写作阶段的 Markdown 大纲。大纲必须包含开头钩子，"
+                                "3-5 个二级标题、每节的核心论点与事实依据、结尾行动建议和各节建议字数。"
+                                "不要虚构读者反馈、数据、案例或来源。"
+                                + skill_instruction("outline")
+                            ),
+                            user=json.dumps(
+                                {
+                                    "title": article.title,
+                                    "strategy_objective": strategy_runtime_snapshot.get("objective")
+                                    or strategy.objective,
+                                    "evidence": evidence_output,
+                                },
+                                ensure_ascii=False,
+                            ),
+                        ),
+                        "outline",
+                    )
+                )
+            },
+        )
+
     writing_output = _run_step(
         db,
         job,
@@ -1103,6 +1147,27 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
         )
         theme_id = strategy_config.get("theme_id")
         render_mode = strategy_config.get("render_mode", "deterministic")
+        theme_selection = {"mode": strategy_config.get("theme_selection_mode", "manual")}
+        if theme_selection["mode"] == "auto":
+            recommended_slug, reason = recommend_editorial_theme(article.title, outline_output, content)
+            recommended_theme = db.scalar(
+                select(Theme).where(Theme.slug == recommended_slug, Theme.enabled.is_(True))
+            )
+            if recommended_theme is not None:
+                theme_id = recommended_theme.id
+                theme_selection.update(
+                    {"recommended_slug": recommended_slug, "theme_id": recommended_theme.id, "reason": reason}
+                )
+                _job_event(db, job, "theme_recommendation", "render", "info", theme_selection)
+            else:
+                theme_selection.update(
+                    {"recommended_slug": recommended_slug, "reason": f"{reason}；推荐主题不可用，保留当前主题"}
+                )
+        runtime_snapshot = dict(article.runtime_snapshot_json or {})
+        runtime_snapshot["theme"] = {"id": theme_id, "version": strategy_config.get("theme_version")}
+        runtime_snapshot["theme_selection"] = theme_selection
+        article.runtime_snapshot_json = runtime_snapshot
+        job.payload_json = {**(job.payload_json or {}), "runtime_snapshot": runtime_snapshot}
         revision = approved_revision or db.scalar(
             select(ArticleRevision)
             .where(ArticleRevision.article_id == article.id)
@@ -1166,6 +1231,8 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
             "article_id": article.id,
             "revision_id": revision.id,
             "rendered_version_id": rendered_version_id,
+            "theme_id": theme_id,
+            "theme_selection": theme_selection,
             "html_length": len(revision.rendered_html or ""),
         }
 

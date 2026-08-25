@@ -13,9 +13,11 @@ from content_ops.models import (
     Review,
     Source,
     Strategy,
+    Theme,
     Topic,
 )
 from content_ops.providers import FakeProvider
+from content_ops.themes import ensure_builtin_themes
 from content_ops.workflow import _parse_quality_review, create_job, run_job
 
 
@@ -92,6 +94,52 @@ def test_workflow_creates_draft_and_is_idempotent(db):
     result = run_job(db, job.id, FakeProvider())
     assert result.status == "succeeded"
     assert article.status == "drafted"
+
+
+
+def test_auto_theme_selection_records_recommendation_on_the_article(db, monkeypatch):
+    source = Source(
+        name="manual-source",
+        source_type="manual",
+        url="https://example.com/source",
+        config_json={"title": "workflow guide", "content": "A confirmed source."},
+    )
+    strategy = Strategy(name="auto-theme", objective="write a useful article")
+    strategy.config_json = {
+        "theme_selection_mode": "auto",
+        "review_rules": {"human_review_required": True},
+    }
+    db.add_all([source, strategy])
+    ensure_builtin_themes(db)
+    db.commit()
+    monkeypatch.setattr(
+        workflow,
+        "recommend_editorial_theme",
+        lambda *_args: ("editorial-playbook", "deterministic test recommendation"),
+    )
+
+    job = create_job(db, strategy, "auto-theme-job")
+    result = run_job(db, job.id, FakeProvider())
+
+    assert result.status == "waiting_review"
+    article = db.scalar(select(Article).where(Article.job_id == job.id))
+    assert article is not None
+    selected_theme = db.get(Theme, article.runtime_snapshot_json["theme"]["id"])
+    assert selected_theme is not None
+    assert selected_theme.slug == "editorial-playbook"
+    assert article.runtime_snapshot_json["theme_selection"] == {
+        "mode": "auto",
+        "recommended_slug": "editorial-playbook",
+        "theme_id": selected_theme.id,
+        "reason": "deterministic test recommendation",
+    }
+    event = db.scalar(
+        select(JobEvent).where(
+            JobEvent.job_id == job.id,
+            JobEvent.event_type == "theme_recommendation",
+        )
+    )
+    assert event is not None
 
 
 def test_failed_job_gets_retry_schedule(db):

@@ -8,8 +8,8 @@ from .channels import ENV_CHANNEL_ID
 from .models import ChannelAccount, MaterialCategory, ModelConfig, Skill, Source, Strategy, Theme
 
 OPTIONAL_STEPS = frozenset({"style", "rewrite"})
-MODEL_STAGES = ("writing", "style", "rewrite", "review", "render")
-SKILL_STAGES = ("writing", "style", "rewrite", "review", "render")
+MODEL_STAGES = ("outline", "writing", "style", "rewrite", "review", "render")
+SKILL_STAGES = ("outline", "writing", "style", "rewrite", "review", "render")
 TOPIC_SCORE_DIMENSIONS = ("heat", "timeliness", "reader_value", "strategy_fit")
 DEFAULT_TOPIC_WEIGHTS = {dimension: 25 for dimension in TOPIC_SCORE_DIMENSIONS}
 
@@ -78,6 +78,11 @@ def validate_strategy_config(config: dict[str, Any] | None) -> dict[str, Any]:
     if theme_id is not None and not isinstance(theme_id, str):
         raise StrategyConfigError("theme_id 必须是字符串")
     normalized["theme_id"] = theme_id
+
+    theme_selection_mode = normalized.get("theme_selection_mode", "manual")
+    if theme_selection_mode not in ("auto", "manual"):
+        raise StrategyConfigError("theme_selection_mode 只能是 auto 或 manual")
+    normalized["theme_selection_mode"] = theme_selection_mode
 
     model_by_stage = normalized.get("model_by_stage", {})
     if not isinstance(model_by_stage, dict) or any(

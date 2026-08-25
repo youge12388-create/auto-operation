@@ -45,6 +45,8 @@ const TEXT = {
   combinationName: "\u7ec4\u5408\u540d\u79f0",
   materialPool: "\u7d20\u6750\u6c60\u8303\u56f4",
   allCategories: "\u7559\u7a7a\u8868\u793a\u4ece\u7d20\u6750\u6c60\u7684\u5168\u90e8\u542f\u7528\u5206\u7c7b\u4e2d\u81ea\u52a8\u9009\u6750",
+  outlineSkill: "\u5927\u7eb2 Skill",
+  outlineModel: "\u5927\u7eb2\u6a21\u578b",
   writingSkill: "\u5199\u4f5c Skill",
   writingModel: "\u5199\u4f5c\u6a21\u578b",
   theme: "\u6392\u7248\u6a21\u677f",
@@ -126,6 +128,11 @@ function id(): string {
   return globalThis.crypto?.randomUUID?.() ?? `combination-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
+function preferredThemeId(themes: Theme[]): string | undefined {
+  return themes.find((item) => item.enabled && item.slug === "editorial-notes")?.id
+    ?? themes.find((item) => item.enabled)?.id;
+}
+
 function defaultCombination(categories: MaterialCategory[], skills: Skill[], models: Model[], themes: Theme[], _channels: ChannelAccount[]): StrategyCombination {
   return {
     id: id(),
@@ -135,7 +142,8 @@ function defaultCombination(categories: MaterialCategory[], skills: Skill[], mod
       material_category_ids: [],
       skill_ids: [],
       model_by_stage: models.find((item) => item.enabled) ? { writing: models.find((item) => item.enabled)!.id } : {},
-      theme_id: themes.find((item) => item.enabled)?.id,
+      theme_id: preferredThemeId(themes),
+      theme_selection_mode: "auto",
       humanization: 75,
       review_rules: { human_review_required: false },
       delivery_mode: "local_draft",
@@ -243,6 +251,7 @@ export function StrategyPipelinePage(props: Props) {
 
   const active = draft.combinations.find((item) => item.id === activeCombinationId) ?? draft.combinations[0];
   const enabledSkills = props.skills.filter((item) => item.status === "published");
+  const enabledOutlineSkills = enabledSkills.filter((item) => item.skill_type === "outline");
   const enabledModels = props.models.filter((item) => item.enabled);
   const enabledThemes = props.themes.filter((item) => item.enabled);
   const enabledChannels = props.channels.filter((item) => item.enabled);
@@ -408,6 +417,18 @@ export function StrategyPipelinePage(props: Props) {
             </div>
             <div className="combination-fields">
               <label><small>{TEXT.materialPool}</small><CategorySelector categories={props.categories} value={active.config.material_category_ids ?? []} onChange={(categoryIds) => updateActive((item) => ({ ...item, config: { ...item.config, material_category_ids: categoryIds } }))} /><span>{TEXT.allCategories}</span></label>
+              <label><small>{TEXT.outlineSkill}</small><select value={(active.config.skill_by_stage ?? {}).outline ?? ""} onChange={(event) => updateActive((item) => {
+                const skillByStage = { ...(item.config.skill_by_stage ?? {}) };
+                if (event.target.value) skillByStage.outline = event.target.value;
+                else delete skillByStage.outline;
+                return { ...item, config: { ...item.config, skill_by_stage: skillByStage } };
+              })}><option value="">静态大纲（不调用模型）</option>{enabledOutlineSkills.map((item) => <option key={item.id} value={item.id}>{item.name}{" · v"}{item.version}</option>)}</select></label>
+              <label><small>{TEXT.outlineModel}</small><select value={(active.config.model_by_stage ?? {}).outline ?? ""} disabled={!(active.config.skill_by_stage ?? {}).outline} onChange={(event) => updateActive((item) => {
+                const modelByStage = { ...(item.config.model_by_stage ?? {}) };
+                if (event.target.value) modelByStage.outline = event.target.value;
+                else delete modelByStage.outline;
+                return { ...item, config: { ...item.config, model_by_stage: modelByStage } };
+              })}><option value="">{TEXT.systemDefault}</option>{enabledModels.map((item) => <option key={item.id} value={item.id}>{item.provider} / {item.name}</option>)}</select></label>
               <label><small>{TEXT.writingSkill}</small><select value={(active.config.skill_by_stage ?? {}).writing ?? active.config.skill_ids?.[0] ?? ""} onChange={(event) => updateActive((item) => {
                 const skillByStage = { ...(item.config.skill_by_stage ?? {}) };
                 if (event.target.value) skillByStage.writing = event.target.value;
@@ -420,13 +441,14 @@ export function StrategyPipelinePage(props: Props) {
                 else delete modelByStage.writing;
                 return { ...item, config: { ...item.config, model_by_stage: modelByStage } };
               })}><option value="">{TEXT.systemDefault}</option>{enabledModels.map((item) => <option key={item.id} value={item.id}>{item.provider} / {item.name}</option>)}</select></label>
-              <label className="combination-review"><small>{TEXT.translation}</small><button type="button" className={active.config.translate_foreign_sources !== false ? "is-on" : ""} onClick={() => updateActive((item) => ({ ...item, config: { ...item.config, translate_foreign_sources: item.config.translate_foreign_sources === false } }))}>{active.config.translate_foreign_sources !== false ? TEXT.on : TEXT.off}</button><span>{TEXT.translationHelp}</span></label><label><small>{TEXT.theme}</small><select value={active.config.theme_id ?? ""} onChange={(event) => updateActive((item) => ({ ...item, config: { ...item.config, theme_id: event.target.value || undefined } }))}><option value="">{TEXT.disabled}</option>{enabledThemes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
+              <label className="combination-review"><small>{TEXT.translation}</small><button type="button" className={active.config.translate_foreign_sources !== false ? "is-on" : ""} onClick={() => updateActive((item) => ({ ...item, config: { ...item.config, translate_foreign_sources: item.config.translate_foreign_sources === false } }))}>{active.config.translate_foreign_sources !== false ? TEXT.on : TEXT.off}</button><span>{TEXT.translationHelp}</span></label><label><small>排版选择</small><select value={active.config.theme_selection_mode ?? "manual"} onChange={(event) => updateActive((item) => ({ ...item, config: { ...item.config, theme_selection_mode: event.target.value as "auto" | "manual" } }))}><option value="auto">按文章结构自动推荐</option><option value="manual">手动指定主题</option></select><span>{(active.config.theme_selection_mode ?? "manual") === "auto" ? "根据大纲和正文在观点长文、案例复盘、方法清单中推荐；规则固定、不会随机换皮。" : "固定使用下方选择的主题。"}</span></label>
+              <label><small>{TEXT.theme}</small><select disabled={(active.config.theme_selection_mode ?? "manual") === "auto"} value={active.config.theme_id ?? ""} onChange={(event) => updateActive((item) => ({ ...item, config: { ...item.config, theme_id: event.target.value || undefined } }))}><option value="">{TEXT.disabled}</option>{enabledThemes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><span>{(active.config.theme_selection_mode ?? "manual") === "auto" ? "切换到手动指定后可选择主题。" : "此选择会覆盖自动推荐。"}</span></label>
               <label className="combination-review"><small>{TEXT.review}</small><button type="button" disabled={active.config.delivery_mode === "auto_publish"} className={(active.config.review_rules?.human_review_required ?? false) ? "is-on" : ""} onClick={() => updateActive((item) => ({ ...item, config: { ...item.config, review_rules: { ...(item.config.review_rules ?? {}), human_review_required: !(item.config.review_rules?.human_review_required ?? false) } } }))}>{(active.config.review_rules?.human_review_required ?? false) ? TEXT.on : TEXT.off}</button><span>{active.config.delivery_mode === "auto_publish" ? "AI 审核须通过 75 分且联网事实核验完整；否则进入人工审核" : "默认关闭；开启后文章必须由你通过后才能交付"}</span></label>
               <label><small>交付模式</small><select value={active.config.delivery_mode ?? "local_draft"} onChange={(event) => updateActive((item) => { const deliveryMode = event.target.value as "local_draft" | "wechat_draft" | "auto_publish"; return { ...item, config: { ...item.config, delivery_mode: deliveryMode, review_rules: { ...(item.config.review_rules ?? {}), human_review_required: deliveryMode === "auto_publish" ? false : (item.config.review_rules?.human_review_required ?? false) } } }; })}><option value="local_draft">本地成稿（不调用微信）</option><option value="wechat_draft">微信草稿测试</option><option value="auto_publish">自动正式发布</option></select><span>{active.config.delivery_mode === "auto_publish" ? "会先创建草稿；默认开启评论；只有服务器全局发布开关开启且账号有权限时才提交正式发布" : active.config.delivery_mode === "wechat_draft" ? "自动写入微信草稿，不会正式发布" : "生成后进入本系统成稿库"}</span></label>
               {(active.config.delivery_mode === "wechat_draft" || active.config.delivery_mode === "auto_publish") && <><label><small>微信公众号</small><select value={active.config.channel_account_id ?? ""} onChange={(event) => updateActive((item) => ({ ...item, config: { ...item.config, channel_account_id: event.target.value || undefined, wechat_thumb_media_id: event.target.value === item.config.channel_account_id ? item.config.wechat_thumb_media_id : undefined } }))}><option value="">请选择账号</option>{enabledChannels.map((channel) => <option key={channel.id} value={channel.id}>{channel.name}{channel.capabilities.publish ? " · 可发布" : " · 仅草稿"}</option>)}</select></label><label><small>默认封面素材 ID</small><input value={active.config.wechat_thumb_media_id ?? ""} onChange={(event) => updateActive((item) => ({ ...item, config: { ...item.config, wechat_thumb_media_id: event.target.value.trim() || undefined } }))} placeholder="微信永久素材 media_id" /><button type="button" className="flow-secondary" disabled={!active.config.channel_account_id || thumbUploading} onClick={() => thumbFileRef.current?.click()}>{thumbUploading ? "上传中…" : "上传 JPG/PNG 封面"}</button><span>{active.config.wechat_thumb_media_id ? "封面已上传并回填 media_id" : "自动交付必须使用已经上传到该公众号的永久封面素材"}</span></label><input ref={thumbFileRef} type="file" accept="image/jpeg,image/png" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadThumb(file); event.target.value = ""; }} /></>}
               <label className="combination-range"><small>{TEXT.humanization} <b>{Number(active.config.humanization ?? 75)}%</b></small><input type="range" min="0" max="100" value={Number(active.config.humanization ?? 75)} onChange={(event) => updateActive((item) => ({ ...item, config: { ...item.config, humanization: Number(event.target.value) } }))} /></label>
             </div>
-            <div className="combination-summary"><span><Icon name="database" size={15} />{active.config.material_category_ids?.length || TEXT.all}</span><b>{"\u2192"}</b><span><Icon name="magic" size={15} />{resourceNames.skills.get((active.config.skill_by_stage ?? {}).writing ?? active.config.skill_ids?.[0] ?? "") ?? TEXT.default}</span><b>{"\u2192"}</b><span><Icon name="robot" size={15} />{resourceNames.models.get((active.config.model_by_stage ?? {}).writing ?? "") ?? TEXT.default}</span><b>{"\u2192"}</b><span><Icon name="image" size={15} />{resourceNames.themes.get(active.config.theme_id ?? "") ?? TEXT.default}</span><b>{"→"}</b><span><Icon name="mail" size={15} />{active.config.delivery_mode === "auto_publish" ? "自动发布" : active.config.delivery_mode === "wechat_draft" ? (resourceNames.channels.get(active.config.channel_account_id ?? "") ?? "微信草稿") : "本地成稿"}</span></div>
+            <div className="combination-summary"><span><Icon name="database" size={15} />{active.config.material_category_ids?.length || TEXT.all}</span><b>{"\u2192"}</b><span><Icon name="magic" size={15} />{resourceNames.skills.get((active.config.skill_by_stage ?? {}).writing ?? active.config.skill_ids?.[0] ?? "") ?? TEXT.default}</span><b>{"\u2192"}</b><span><Icon name="robot" size={15} />{resourceNames.models.get((active.config.model_by_stage ?? {}).writing ?? "") ?? TEXT.default}</span><b>{"\u2192"}</b><span><Icon name="image" size={15} />{(active.config.theme_selection_mode ?? "manual") === "auto" ? "编辑留白 · 自动推荐" : (resourceNames.themes.get(active.config.theme_id ?? "") ?? TEXT.default)}</span><b>{"→"}</b><span><Icon name="mail" size={15} />{active.config.delivery_mode === "auto_publish" ? "自动发布" : active.config.delivery_mode === "wechat_draft" ? (resourceNames.channels.get(active.config.channel_account_id ?? "") ?? "微信草稿") : "本地成稿"}</span></div>
             <div className="combination-actions"><button type="button" onClick={duplicateCombination}>{TEXT.duplicate}</button><button type="button" className="danger" onClick={removeCombination}>{TEXT.remove}</button></div>
           </div>}
         </section>

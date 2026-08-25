@@ -1,3 +1,4 @@
+import pytest
 from fastapi import BackgroundTasks
 from sqlalchemy import select
 
@@ -98,8 +99,17 @@ def test_environment_channel_is_valid_for_automatic_draft_but_not_publish(db):
         raise AssertionError("the environment channel must never gain publish capability")
 
 def test_workflow_applies_stage_models_skills_and_optional_steps(db):
+    outline_model = ModelConfig(provider="fake", name="outline-fake")
     writing_model = ModelConfig(provider="fake", name="writing-fake")
     rewrite_model = ModelConfig(provider="fake", name="rewrite-fake")
+    outline_skill = Skill(
+        name="outline-skill",
+        skill_type="outline",
+        version="1.0.0",
+        status="published",
+        manifest_json={"name": "outline-skill", "type": "outline", "version": "1.0.0"},
+        prompt="Plan the reader problem, hook, evidence, and conclusion.",
+    )
     writing_skill = Skill(
         name="writing-skill",
         skill_type="writing",
@@ -128,7 +138,9 @@ def test_workflow_applies_stage_models_skills_and_optional_steps(db):
         url="https://example.com/not-selected",
         config_json={"title": "不应被选中", "content": "这条内容不属于当前组合。"},
     )
-    db.add_all([writing_model, rewrite_model, writing_skill, rewrite_skill, source, other_source])
+    db.add_all(
+        [outline_model, writing_model, rewrite_model, outline_skill, writing_skill, rewrite_skill, source, other_source]
+    )
     db.flush()
     strategy = Strategy(
         name="配置驱动策略",
@@ -136,8 +148,8 @@ def test_workflow_applies_stage_models_skills_and_optional_steps(db):
         config_json={
             "disabled_steps": ["style"],
             "source_ids": [source.id],
-            "model_by_stage": {"writing": writing_model.id, "rewrite": rewrite_model.id},
-            "skill_by_stage": {"writing": writing_skill.id, "rewrite": rewrite_skill.id},
+            "model_by_stage": {"outline": outline_model.id, "writing": writing_model.id, "rewrite": rewrite_model.id},
+            "skill_by_stage": {"outline": outline_skill.id, "writing": writing_skill.id, "rewrite": rewrite_skill.id},
             "review_rules": {"human_review_required": False},
         },
     )
@@ -151,8 +163,10 @@ def test_workflow_applies_stage_models_skills_and_optional_steps(db):
     article = db.scalar(select(Article).where(Article.job_id == job.id))
     assert article is not None
     assert article.status == "drafted"
+    assert article.model_snapshot["stages"]["outline"]["id"] == outline_model.id
     assert article.model_snapshot["stages"]["writing"]["id"] == writing_model.id
     assert article.model_snapshot["stages"]["rewrite"]["id"] == rewrite_model.id
+    assert article.skill_snapshot["stages"]["outline"]["version"] == "1.0.0"
     assert article.skill_snapshot["stages"]["writing"]["version"] == "1.0.0"
     assert article.runtime_snapshot_json["strategy"]["disabled_steps"] == ["style"]
     assert article.runtime_snapshot_json["strategy"]["source_ids"] == [source.id]
@@ -162,7 +176,7 @@ def test_workflow_applies_stage_models_skills_and_optional_steps(db):
     assert style_step is not None
     assert style_step.status == "skipped"
     stages = [item.stage for item in db.scalars(select(ModelCallLog).where(ModelCallLog.job_id == job.id)).all()]
-    assert stages == ["material_curation", "topic_recommendation", "writing", "rewrite", "review"]
+    assert stages == ["material_curation", "topic_recommendation", "outline", "writing", "rewrite", "review"]
 
 
 def test_edited_revision_is_the_one_sent_to_local_draft_after_approval(db):
@@ -294,3 +308,11 @@ def test_job_execution_override_sets_writing_skill_without_fallback(db):
     overridden_article = db.scalar(select(Article).where(Article.job_id == overridden_job.id))
     assert overridden_article.skill_snapshot["stages"]["writing"]["name"] == "my-writer"
     assert overridden_article.skill_snapshot["stages"]["writing"]["id"] == override_skill.id
+
+
+def test_theme_selection_mode_defaults_to_manual_and_validates_values():
+    assert validate_strategy_config({})["theme_selection_mode"] == "manual"
+    assert validate_strategy_config({"theme_selection_mode": "auto"})["theme_selection_mode"] == "auto"
+
+    with pytest.raises(StrategyConfigError, match="theme_selection_mode"):
+        validate_strategy_config({"theme_selection_mode": "rotate"})

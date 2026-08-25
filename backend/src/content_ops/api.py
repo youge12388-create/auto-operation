@@ -2384,7 +2384,9 @@ def _channel_html(
 ) -> tuple[str, dict[str, object]]:
     selected_theme_id = theme_id or (article.runtime_snapshot_json.get("theme") or {}).get("id")
     if not selected_theme_id:
-        default_theme = db.scalar(select(Theme).where(Theme.enabled.is_(True)).order_by(Theme.created_at.asc()))
+        default_theme = db.scalar(
+            select(Theme).where(Theme.slug == "editorial-notes", Theme.enabled.is_(True))
+        ) or db.scalar(select(Theme).where(Theme.enabled.is_(True)).order_by(Theme.created_at.asc()))
         if default_theme is not None:
             selected_theme_id = default_theme.id
         else:
