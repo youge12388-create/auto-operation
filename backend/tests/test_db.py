@@ -26,3 +26,24 @@ def test_sqlite_engine_registers_begin_immediate() -> None:
 
     assert sqlalchemy.event.contains(db_module.engine, "begin", db_module._begin_immediate)
     assert sqlalchemy.event.contains(db_module.engine, "connect", db_module._configure_sqlite)
+
+
+def test_sqlite_event_reader_does_not_register_begin_immediate() -> None:
+    """A long-lived SSE reader must never reserve SQLite's writer lock."""
+    import sqlalchemy.event
+    from sqlalchemy import text
+
+    from content_ops import db as db_module
+    from content_ops.settings import get_settings
+
+    if not get_settings().database_url.startswith("sqlite"):
+        import pytest
+
+        pytest.skip("SQLite-only behavior")
+
+    assert not sqlalchemy.event.contains(db_module.read_engine, "begin", db_module._begin_immediate)
+    assert sqlalchemy.event.contains(db_module.read_engine, "connect", db_module._configure_sqlite_read)
+    with db_module.read_engine.connect() as connection:
+        raw_connection = connection.connection.driver_connection
+        connection.execute(text("SELECT 1"))
+        assert not raw_connection.in_transaction

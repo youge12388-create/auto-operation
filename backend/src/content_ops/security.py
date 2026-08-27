@@ -64,15 +64,19 @@ def decrypt_secret(value: str | None) -> str | None:
         raise ValueError("stored secret cannot be decrypted") from None
 
 
-def get_current_user(
-    session_cookie: str | None = Cookie(default=None, alias=SESSION_COOKIE),
-    db: Session = Depends(get_db),
-) -> User:
+def current_user_from_session(session_cookie: str | None, db: Session) -> User:
     user_id = read_session(session_cookie) if session_cookie else None
     user = db.get(User, user_id) if user_id else None
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="登录已失效")
     return user
+
+
+def get_current_user(
+    session_cookie: str | None = Cookie(default=None, alias=SESSION_COOKIE),
+    db: Session = Depends(get_db),
+) -> User:
+    return current_user_from_session(session_cookie, db)
 
 
 def require_roles(*roles: str):

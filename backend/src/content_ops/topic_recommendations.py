@@ -137,7 +137,7 @@ def recommend_topics(
             },
             ensure_ascii=False,
         ),
-        max_tokens=1800,
+        max_tokens=3200,
     )
     started = time.perf_counter()
     provider_name = model.provider if model is not None else provider.__class__.__name__

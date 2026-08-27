@@ -111,7 +111,7 @@ def curate_materials(
             },
             ensure_ascii=False,
         ),
-        max_tokens=1800,
+        max_tokens=6000,
     )
     started = time.perf_counter()
     provider_name = model.provider if model is not None else provider.__class__.__name__

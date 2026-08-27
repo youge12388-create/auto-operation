@@ -88,7 +88,7 @@
 }
 .login-thesis h1 em {
   color: transparent;
-  background: linear-gradient(135deg, #2563eb, #06b6d4);
+  background: linear-gradient(120deg, #a968ee 0%, #8b5cf6 45%, #6d5cf5 100%);
   -webkit-background-clip: text;
   background-clip: text;
   font-style: normal;

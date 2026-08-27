@@ -172,6 +172,95 @@ def test_terminal_job_is_not_retried(db):
     assert job.available_at is None
 
 
+def test_persisted_provider_failure_redacts_credentials(db):
+    secret = "provider-secret-value-123456"
+
+    class FailingProvider:
+        api_key = secret
+
+        def complete(self, request):
+            raise RuntimeError(
+                f"upstream request rejected; raw={secret}; Authorization: Bearer {secret}; "
+                f"x-api-key={secret}; access_token={secret}; app_secret={secret}; secret={secret}"
+            )
+
+    strategy = Strategy(name="redaction", objective="redact provider errors")
+    db.add(strategy)
+    db.commit()
+    job = create_job(db, strategy, "redaction-job")
+    article = Article(job_id=job.id, title="redaction test")
+    db.add(article)
+    db.commit()
+
+    with pytest.raises(RuntimeError, match="upstream request rejected"):
+        workflow._run_step(
+            db,
+            job,
+            "writing",
+            lambda: {
+                "content": workflow._complete_with_log(
+                    db,
+                    job,
+                    article,
+                    FailingProvider(),
+                    workflow.CompletionRequest(system="test", user="test"),
+                    "writing",
+                )
+            },
+        )
+
+    db.refresh(job)
+    step = db.scalar(select(JobStep).where(JobStep.job_id == job.id, JobStep.step_name == "writing"))
+    failed_event = db.scalar(
+        select(JobEvent).where(JobEvent.job_id == job.id, JobEvent.event_type == "step_failed")
+    )
+    failed_model_call = db.scalar(
+        select(ModelCallLog).where(ModelCallLog.job_id == job.id, ModelCallLog.status == "failed")
+    )
+
+    assert step is not None
+    assert failed_event is not None
+    assert failed_model_call is not None
+    persisted_errors = [
+        job.last_error or "",
+        step.error or "",
+        failed_event.payload_json["error"],
+        failed_model_call.error or "",
+    ]
+    assert all(secret not in error for error in persisted_errors)
+    assert all("upstream request rejected" in error for error in persisted_errors)
+    assert all("[redacted]" in error for error in persisted_errors)
+    assert len(failed_event.payload_json["error"]) <= 500
+
+
+def test_job_event_redacts_reason_and_nested_credentials(db):
+    secret = "event-secret-value-123456"
+    strategy = Strategy(name="event-redaction", objective="redact event payloads")
+    db.add(strategy)
+    db.commit()
+    job = create_job(db, strategy, "event-redaction-job")
+
+    workflow._job_event(
+        db,
+        job,
+        "render_fallback",
+        "render",
+        "warning",
+        {
+            "reason": f"fallback: Bearer {secret}; access_token={secret}",
+            "nested": {"api_key": secret},
+        },
+    )
+    db.commit()
+
+    event = db.scalar(select(JobEvent).where(JobEvent.job_id == job.id))
+
+    assert event is not None
+    assert secret not in str(event.payload_json)
+    assert event.payload_json["nested"]["api_key"] == "[redacted]"
+    assert event.payload_json["reason"].endswith("[redacted]")
+
+
 def test_canceled_job_is_not_executed(db):
     strategy = Strategy(name="取消策略", objective="测试取消")
     db.add(strategy)
@@ -247,12 +336,13 @@ def test_scan_isolates_failed_source_and_keeps_scan_running(db, monkeypatch):
     db.commit()
 
     real_collect_source = workflow.collect_source
+    secret = "source-secret-value-123456"
 
     def flaky_collect_source(db_session, source, **kwargs):
         if source.name == "bad":
             source.last_error = "simulated network failure"
             db_session.commit()
-            raise ConnectionError("simulated network failure")
+            raise ConnectionError(f"simulated network failure; x-api-key={secret}; Bearer {secret}")
         return real_collect_source(db_session, source, **kwargs)
 
     monkeypatch.setattr(workflow, "collect_source", flaky_collect_source)
@@ -262,9 +352,13 @@ def test_scan_isolates_failed_source_and_keeps_scan_running(db, monkeypatch):
     assert result.status == "waiting_topic"
     step = db.scalar(select(JobStep).where(JobStep.job_id == job.id, JobStep.step_name == "collect"))
     assert step.status == "succeeded"
+    assert step.output_json["succeeded_sources"] == 1
     assert bad.last_error == "simulated network failure"
     failed_events = db.scalars(
         select(JobEvent).where(JobEvent.job_id == job.id, JobEvent.event_type == "source_failed")
     ).all()
     assert len(failed_events) == 1
     assert failed_events[0].payload_json["source"] == "bad"
+    assert secret not in failed_events[0].payload_json["error"]
+    assert "simulated network failure" in failed_events[0].payload_json["error"]
+    assert secret not in step.output_json["failed_sources"]["bad"]

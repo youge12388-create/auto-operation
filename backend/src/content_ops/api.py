@@ -12,6 +12,7 @@ from uuid import uuid4
 
 from fastapi import (
     BackgroundTasks,
+    Cookie,
     Depends,
     FastAPI,
     File,
@@ -28,7 +29,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from .channels import ENV_CHANNEL_ID
-from .db import get_db
+from .db import ReadSessionLocal, get_db
 from .ingestion import collect_source
 from .material_classification import classify_materials as run_material_classification
 from .material_curation import curate_materials as run_material_curation
@@ -61,6 +62,7 @@ from .models import (
 )
 from .providers import CompletionRequest, provider_for
 from .queueing import notify_wake
+from .redaction import redact_error, redact_event_payload
 from .scheduler import normalize_schedule
 from .schemas import (
     ArticleRead,
@@ -134,6 +136,7 @@ from .schemas import (
 )
 from .security import (
     SESSION_COOKIE,
+    current_user_from_session,
     decrypt_secret,
     encrypt_secret,
     get_current_user,
@@ -158,6 +161,19 @@ from .workflow import create_job
 
 app = FastAPI(title="AI 自动内容运营系统", version="0.1.0")
 logger = logging.getLogger(__name__)
+JOB_EVENT_REPLAY_LIMIT = 500
+JOB_EVENT_POLL_SECONDS = 1
+
+
+def get_stream_current_user(
+    session_cookie: str | None = Cookie(default=None, alias=SESSION_COOKIE),
+) -> User:
+    """Authenticate an SSE connection without retaining a SQLite write lock."""
+    db = ReadSessionLocal()
+    try:
+        return current_user_from_session(session_cookie, db)
+    finally:
+        db.close()
 
 
 def wechat_error_detail(exc: WeChatAPIError) -> str:
@@ -434,15 +450,23 @@ def evidence_package_read(package: EvidencePackage) -> EvidencePackageRead:
 
 
 def job_event_read(event: JobEvent) -> JobEventRead:
+    payload = redact_event_payload(event.payload_json)
     return JobEventRead(
         id=event.id,
         job_id=event.job_id,
         event_type=event.event_type,
         step_name=event.step_name,
         status=event.status,
-        payload=event.payload_json,
+        payload=payload if isinstance(payload, dict) else {},
         created_at=event.created_at,
     )
+
+
+def job_read(job: Job) -> JobRead:
+    result = JobRead.model_validate(job)
+    if result.last_error:
+        result.last_error = redact_error(result.last_error, max_length=2000)
+    return result
 
 
 def add_audit(
@@ -1930,7 +1954,7 @@ def list_audit_logs(
 
 @app.get("/api/v1/jobs", response_model=list[JobRead])
 def list_jobs(_: User = Depends(get_current_user), db: Session = Depends(get_db)) -> list[JobRead]:
-    return list(db.scalars(select(Job).order_by(Job.created_at.desc()).limit(100)).all())
+    return [job_read(item) for item in db.scalars(select(Job).order_by(Job.created_at.desc()).limit(100)).all()]
 
 
 @app.post("/api/v1/jobs", response_model=JobRead)
@@ -1939,7 +1963,7 @@ def add_job(
     background: BackgroundTasks,
     _: User = Depends(require_roles("admin", "operator")),
     db: Session = Depends(get_db),
-) -> Job:
+) -> JobRead:
     strategy = db.get(Strategy, payload.strategy_id)
     if not strategy:
         raise HTTPException(status_code=404, detail="内容策略不存在")
@@ -1957,7 +1981,7 @@ def add_job(
     except OperationalError as exc:
         raise_job_schema_error(exc)
     notify_wake()
-    return job
+    return job_read(job)
 
 
 @app.post("/api/v1/jobs/{job_id}/retry", response_model=JobRead)
@@ -1966,7 +1990,7 @@ def retry_job(
     background: BackgroundTasks,
     _: User = Depends(require_roles("admin", "operator")),
     db: Session = Depends(get_db),
-) -> Job:
+) -> JobRead:
     job = db.get(Job, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="任务不存在")
@@ -1990,7 +2014,7 @@ def retry_job(
                 raise HTTPException(status_code=503, detail="数据库正忙，请稍后重试") from exc
             time.sleep(0.5 * (attempt + 1))
     notify_wake()
-    return job
+    return job_read(job)
 
 
 @app.post("/api/v1/jobs/{job_id}/cancel", response_model=JobRead)
@@ -1998,7 +2022,7 @@ def cancel_job(
     job_id: str,
     _: User = Depends(require_roles("admin", "operator")),
     db: Session = Depends(get_db),
-) -> Job:
+) -> JobRead:
     job = db.get(Job, job_id)
     if not job:
         raise HTTPException(status_code=404, detail="任务不存在")
@@ -2012,7 +2036,7 @@ def cancel_job(
         started = job.started_at if job.started_at.tzinfo is not None else job.started_at.replace(tzinfo=timezone.utc)
         job.duration_ms = max(0, int((job.completed_at - started).total_seconds() * 1000))
     db.commit()
-    return job
+    return job_read(job)
 
 
 @app.get("/api/v1/articles", response_model=list[ArticleRead])
@@ -2348,30 +2372,76 @@ def dashboard(_: User = Depends(get_current_user), db: Session = Depends(get_db)
 
 
 @app.get("/api/v1/events/jobs")
-async def job_events(request: Request, _: User = Depends(get_current_user)) -> StreamingResponse:
-    async def stream():
-        from .db import SessionLocal
+async def job_events(request: Request, _: User = Depends(get_stream_current_user)) -> StreamingResponse:
+    last_event_id = request.headers.get("last-event-id") or None
 
-        seen: set[str] = set()
-        while not await request.is_disconnected():
-            db = SessionLocal()
+    async def stream():
+        cursor_created_at: datetime | None = None
+        emitted_ids_at_cursor: set[str] = set()
+        if last_event_id:
+            db = ReadSessionLocal()
             try:
-                events = db.scalars(
-                    select(JobEvent).order_by(JobEvent.created_at.asc(), JobEvent.id.asc()).limit(500)
-                ).all()
+                last_event = db.get(JobEvent, last_event_id)
+                if last_event is not None:
+                    cursor_created_at = last_event.created_at
+                    emitted_ids_at_cursor.add(last_event.id)
+            finally:
+                db.close()
+
+        while not await request.is_disconnected():
+            db = ReadSessionLocal()
+            try:
+                if cursor_created_at is None:
+                    # A new subscriber receives a bounded, chronological replay of
+                    # the newest events rather than being pinned to the first 500.
+                    events = list(
+                        reversed(
+                            db.scalars(
+                                select(JobEvent)
+                                .order_by(JobEvent.created_at.desc(), JobEvent.id.desc())
+                                .limit(JOB_EVENT_REPLAY_LIMIT)
+                            ).all()
+                        )
+                    )
+                else:
+                    # UUIDs are not monotonic and SQLite's CURRENT_TIMESTAMP is
+                    # second-granular. Finish the current timestamp group by ID
+                    # membership before moving the time cursor, otherwise an event
+                    # from the same second can be skipped forever.
+                    current_timestamp_events = db.scalars(
+                        select(JobEvent)
+                        .where(JobEvent.created_at == cursor_created_at)
+                        .order_by(JobEvent.id.asc())
+                    ).all()
+                    events = [
+                        event for event in current_timestamp_events if event.id not in emitted_ids_at_cursor
+                    ][:JOB_EVENT_REPLAY_LIMIT]
+                    if not events:
+                        events = db.scalars(
+                            select(JobEvent)
+                            .where(JobEvent.created_at > cursor_created_at)
+                            .order_by(JobEvent.created_at.asc(), JobEvent.id.asc())
+                            .limit(JOB_EVENT_REPLAY_LIMIT)
+                        ).all()
             finally:
                 db.close()
             emitted = False
             for event in events:
-                if event.id in seen:
-                    continue
-                seen.add(event.id)
                 emitted = True
                 payload = json.dumps(job_event_read(event).model_dump(mode="json"), default=str)
-                yield f"data: {payload}\n\n"
+                yield f"id: {event.id}\ndata: {payload}\n\n"
+            if events:
+                latest_created_at = events[-1].created_at
+                if latest_created_at == cursor_created_at:
+                    emitted_ids_at_cursor.update(event.id for event in events)
+                else:
+                    cursor_created_at = latest_created_at
+                    emitted_ids_at_cursor = {
+                        event.id for event in events if event.created_at == cursor_created_at
+                    }
             if not emitted:
                 yield f"data: {json.dumps({'type': 'heartbeat'})}\n\n"
-            await asyncio.sleep(1)
+            await asyncio.sleep(JOB_EVENT_POLL_SECONDS)
 
     return StreamingResponse(stream(), media_type="text/event-stream")
 

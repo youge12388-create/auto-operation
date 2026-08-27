@@ -5,8 +5,10 @@ import { api, type Article, type ChannelAccount, type Job, type Material, type M
 import { Icon, type IconName, StatusPill } from "./design";
 import { StrategyPipelinePage } from "./StrategyPipelinePage";
 import { ArticleLibrary, hasFinalArticleBody, MaterialWorkspace, ReviewQueue, TopicRadar } from "./ContentFlowPages";
+import { OperationsCenter } from "./OperationsCenter";
+import { isActiveJob } from "./jobPresentation";
 
-type Page = "dashboard" | "materials" | "topics" | "review" | "library" | "settings" | "editor";
+type Page = "dashboard" | "operations" | "materials" | "topics" | "review" | "library" | "settings" | "editor";
 
 const COVER_PLACEHOLDER = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='200'%3E%3Crect fill='%23f2e5f0' width='300' height='200' rx='8'/%3E%3Cg transform='translate(150,100)'%3E%3Cline x1='-24' y1='-12' x2='24' y2='12' stroke='%23c9b0c7' stroke-width='2' stroke-linecap='round'/%3E%3Cline x1='24' y1='-12' x2='-24' y2='12' stroke='%23c9b0c7' stroke-width='2' stroke-linecap='round'/%3E%3C/g%3E%3Ctext x='150' y='130' text-anchor='middle' fill='%23b7a0b5' font-size='12' font-family='sans-serif'%3EClick to upload%3C/text%3E%3C/svg%3E";
 
@@ -74,6 +76,7 @@ const MODEL_VENDOR_OPTIONS: Array<{ value: ModelVendor; label: string }> = [
 ];
 const NAV: Array<{ key: Page; label: string; icon: IconName }> = [
   { key: "dashboard", label: "工作台", icon: "home" },
+  { key: "operations", label: "运行中心", icon: "chart" },
   { key: "materials", label: "素材池", icon: "image" },
   { key: "topics", label: "选题雷达", icon: "topic" },
   { key: "review", label: "待审核", icon: "review" },
@@ -119,10 +122,10 @@ function Dashboard({ materials, topics, articles, jobs, sourcesCount, onNavigate
   const candidateTopics = topics.filter((item) => item.status === "candidate");
   const untriagedMaterials = materials.filter((item) => item.triage_status === "inbox");
   const failedJobs = jobs.filter((item) => item.status.startsWith("failed"));
-  const runningJobs = jobs.filter((item) => ["queued", "running", "failed_retryable", "waiting_topic"].includes(item.status));
+  const runningJobs = jobs.filter(isActiveJob);
   const deliveredArticles = articles.filter((item) => ["approved", "drafted", "wechat_draft", "published"].includes(item.status));
   const tasks: Array<{ key: string; icon: IconName; title: string; detail: string; action: string; tone: string; onClick: () => void }> = [];
-  if (failedJobs[0]) tasks.push({ key: `job-${failedJobs[0].id}`, icon: "alert", title: "有自动化任务需要处理", detail: failedJobs[0].last_error || `任务停在「${failedJobs[0].current_step || "未知步骤"}` , action: "查看生产线", tone: "danger", onClick: () => onNavigate("settings") });
+  if (failedJobs[0]) tasks.push({ key: `job-${failedJobs[0].id}`, icon: "alert", title: "有自动化任务需要处理", detail: failedJobs[0].last_error || `任务停在「${failedJobs[0].current_step || "未知步骤"}` , action: "查看错误", tone: "danger", onClick: () => onNavigate("operations") });
   if (reviewQueue[0]) tasks.push({ key: `review-${reviewQueue[0].id}`, icon: "review", title: reviewQueue[0].title || "待审核文章", detail: reviewQueue[0].status === "changes_requested" ? "已退回修改，等待你确认新版本。" : "文章已完成写作，审核通过后进入成稿库。", action: "去审核", tone: "pink", onClick: () => onOpenReview(reviewQueue[0].id) });
   if (candidateTopics[0]) tasks.push({ key: `topic-${candidateTopics[0].id}`, icon: "topic", title: candidateTopics[0].title, detail: candidateTopics[0].rationale || "AI 已完成热点扫描与选题打分。", action: "查看选题", tone: "purple", onClick: () => onNavigate("topics") });
   if (untriagedMaterials[0]) tasks.push({ key: `material-${untriagedMaterials[0].id}`, icon: "image", title: `${untriagedMaterials.length} 条素材等待筛选`, detail: untriagedMaterials[0].title || "先保留真正值得创作的内容。", action: "筛选素材", tone: "cyan", onClick: () => onNavigate("materials") });
@@ -142,7 +145,7 @@ function Dashboard({ materials, topics, articles, jobs, sourcesCount, onNavigate
         {tasks.length ? <div className="dashboard-task-list">{tasks.map((task) => <button type="button" key={task.key} className="dashboard-task-row" onClick={task.onClick}><span className={`dashboard-task-icon ${task.tone}`}><Icon name={task.icon} size={17} /></span><span className="dashboard-task-copy"><strong>{task.title}</strong><small>{shortText(task.detail, 96)}</small></span><em>{task.action}<Icon name="chevron" size={14} /></em></button>)}</div> : <div className="dashboard-empty-list">没有堆积事项。下一轮自动化完成后，会自动回到这里。</div>}
       </div>
       <div className="dashboard-delivery">
-        <div className="dashboard-section-head"><div><h2>交付与运行</h2><p>确认系统在持续推进</p></div><button type="button" onClick={() => onNavigate("library")}>查看成稿库</button></div>
+        <div className="dashboard-section-head"><div><h2>交付与运行</h2><p>确认系统在持续推进</p></div><button type="button" onClick={() => onNavigate("operations")}>查看运行中心</button></div>
         <div className="dashboard-delivery-stats"><div><strong>{deliveredArticles.length}</strong><span>可交付文章</span></div><div><strong>{runningJobs.length}</strong><span>运行中任务</span></div><div><strong>{sourcesCount}</strong><span>启用信息源</span></div></div>
         {runningJobs.length ? <div className="dashboard-running-list">{runningJobs.slice(0, 3).map((job) => <div key={job.id} className="dashboard-running-row"><span className={job.status === "running" ? "is-running" : ""}><Icon name={job.status.startsWith("failed") ? "alert" : "refresh"} size={15} /></span><div><strong>{job.current_step || "正在准备任务"}</strong><small>{job.status === "failed_retryable" ? "执行失败，系统将自动重试" : job.status === "queued" ? "正在排队" : "自动化处理中"}</small></div><time>{formatTime(job.updated_at)}</time></div>)}</div> : <div className="dashboard-empty-list">目前没有运行中的自动化任务。</div>}
       </div>
@@ -825,6 +828,7 @@ export function FigmaConsole({ currentUser }: { currentUser: User }) {
   const [curationResult, setCurationResult] = useState<{ candidate_count: number; selected_count: number; selected_ids: string[]; selected_titles: string[]; message: string } | null>(null);
   const [settingsTab, setSettingsTab] = useState<"strategy" | "sources" | "models" | "channels" | "users">("strategy");
   const [selectedStrategyId, setSelectedStrategyId] = useState<string | null>(null);
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [creatingStrategy, setCreatingStrategy] = useState(false);
   const sources = useQuery({ queryKey: ["sources"], queryFn: api.sources });
   const materials = useQuery({ queryKey: ["materials"], queryFn: () => api.materials(), refetchInterval: 10000 });
@@ -838,12 +842,37 @@ export function FigmaConsole({ currentUser }: { currentUser: User }) {
   const channels = useQuery({ queryKey: ["channel-accounts"], queryFn: api.channelAccounts });
   const users = useQuery({ queryKey: ["users"], queryFn: api.users, enabled: currentUser.role === "admin" });
   const models = useQuery({ queryKey: ["models"], queryFn: api.models });
-  const jobs = useQuery({ queryKey: ["jobs"], queryFn: api.jobs, refetchInterval: 5000 });
+  const jobs = useQuery({ queryKey: ["jobs"], queryFn: api.jobs, refetchInterval: 15000 });
+  const jobEvents = useQuery({ queryKey: ["job-events", selectedJobId], queryFn: () => api.jobEvents(selectedJobId!), enabled: page === "operations" && Boolean(selectedJobId), refetchInterval: page === "operations" && selectedJobId ? 5000 : false });
   const dashboard = useQuery({ queryKey: ["dashboard"], queryFn: api.dashboard });
   useEffect(() => { if (!selectedChannelId && channels.data?.[0]) setSelectedChannelId(channels.data[0].id); }, [channels.data, selectedChannelId]);
   useEffect(() => { if (!selectedThemeId && themes.data?.[0]) setSelectedThemeId(themes.data[0].id); }, [selectedThemeId, themes.data]);
   useEffect(() => { if (!selectedSkillId && skills.data?.[0]) setSelectedSkillId(skills.data[0].id); }, [selectedSkillId, skills.data]);
   useEffect(() => { if (!creatingStrategy && !selectedStrategyId && strategies.data?.[0]) setSelectedStrategyId(strategies.data[0].id); }, [creatingStrategy, selectedStrategyId, strategies.data]);
+  useEffect(() => {
+    if (page !== "operations") return;
+    const currentJobs = jobs.data || [];
+    if (!currentJobs.length) {
+      if (selectedJobId) setSelectedJobId(null);
+      return;
+    }
+    if (!selectedJobId || !currentJobs.some((job) => job.id === selectedJobId)) setSelectedJobId(currentJobs[0].id);
+  }, [jobs.data, page, selectedJobId]);
+  useEffect(() => {
+    if (page !== "operations") return;
+    const stream = new EventSource("/api/v1/events/jobs");
+    stream.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data) as { job_id?: string; type?: string };
+        if (payload.type === "heartbeat") return;
+        void queryClient.invalidateQueries({ queryKey: ["jobs"] });
+        if (payload.job_id === selectedJobId) void queryClient.invalidateQueries({ queryKey: ["job-events", selectedJobId] });
+      } catch {
+        // Polling remains the recovery path for malformed or legacy event streams.
+      }
+    };
+    return () => stream.close();
+  }, [page, queryClient, selectedJobId]);
   const refresh = (...keys: string[]) => Promise.all(keys.map((key) => queryClient.invalidateQueries({ queryKey: [key] })));
   const triage = useMutation({ mutationFn: ({ id, decision }: { id: string; decision: "save" | "ignore" | "reopen" }) => api.triageMaterial(id, decision), onSuccess: () => void refresh("materials"), onError: (error: Error) => message.error(error.message) });
   const collectSources = useMutation({ mutationFn: async (ids: string[]) => { const results = await Promise.all(ids.map((id) => api.collectSource(id))); return results.reduce((total, result) => ({ count: total.count + result.count, classified: total.classified + result.classified_count, failed: total.failed + result.classification_failed_count }), { count: 0, classified: 0, failed: 0 }); }, onSuccess: (result) => { message.success(`采集完成：素材 ${result.count} 条，AI 已分类 ${result.classified} 条${result.failed ? `，${result.failed} 条分类待重试` : ""}`); void refresh("sources", "materials", "material-categories", "dashboard"); }, onError: (error: Error) => message.error(`采集失败：${error.message}`) });
@@ -909,7 +938,8 @@ export function FigmaConsole({ currentUser }: { currentUser: User }) {
   const disableChannel = useMutation({ mutationFn: api.disableChannelAccount, onSuccess: () => { void refresh("channel-accounts"); message.success("公众号账号已停用"); }, onError: (error: Error) => message.error(error.message) });
   const addUser = useMutation({ mutationFn: api.addUser, onSuccess: () => { void refresh("users"); message.success("用户已添加"); }, onError: (error: Error) => message.error(error.message) });  const saveStrategy = useMutation({ mutationFn: ({ id, payload }: { id?: string; payload: StrategySavePayload }) => id ? api.updateStrategy(id, { name: payload.name, objective: payload.objective, schedule: payload.schedule, automation_level: payload.automation_level, enabled: payload.enabled, config: payload.config }) : api.addStrategy({ name: payload.name, objective: payload.objective, schedule: payload.schedule, automation_level: payload.automation_level, enabled: payload.enabled, config: payload.config }), onSuccess: (result) => { void refresh("strategies"); setSelectedStrategyId(result.id); setCreatingStrategy(false); message.success("策略已保存"); }, onError: (error: Error) => message.error(error.message) });
   const runStrategy = useMutation({ mutationFn: ({ id, combinationId }: { id: string; combinationId?: string }) => api.runStrategy(id, combinationId), onSuccess: () => { message.success("自动化任务已启动：将自动采集、分类、精选、选题、写作、审核并按交付模式处理"); void refresh("jobs", "articles", "materials", "topics"); }, onError: (error: Error) => message.error(error.message) });
-  const retryJob = useMutation({ mutationFn: api.retryJob, onSuccess: () => { message.success("任务已重新进入队列"); void refresh("jobs", "articles"); }, onError: (error: Error) => message.error(error.message) });
+  const retryJob = useMutation({ mutationFn: api.retryJob, onSuccess: () => { message.success("任务已重新进入队列"); void refresh("jobs", "job-events", "articles"); }, onError: (error: Error) => message.error(error.message) });
+  const cancelJob = useMutation({ mutationFn: api.cancelJob, onSuccess: () => { message.success("任务已取消"); void refresh("jobs", "job-events"); }, onError: (error: Error) => message.error(error.message) });
   const reviewArticle = useMutation({
     mutationFn: ({ article, decision }: { article: Article; decision: "approve" | "request_changes" }) => {
       const revision = article.revisions[article.revisions.length - 1];
@@ -966,6 +996,7 @@ export function FigmaConsole({ currentUser }: { currentUser: User }) {
   });
   const content = useMemo(() => {
     if (page === "dashboard") return <Dashboard materials={materials.data || []} topics={topics.data || []} articles={articles.data || []} jobs={jobs.data || []} sourcesCount={dashboard.data?.sources || 0} onNavigate={setPage} onOpenReview={(id) => { setSelectedArticleId(id); setPage("review"); }} />;
+    if (page === "operations") return <OperationsCenter jobs={jobs.data || []} strategies={strategies.data || []} selectedJobId={selectedJobId} events={jobEvents.data || []} eventsLoading={jobEvents.isLoading} eventsError={jobEvents.error instanceof Error ? jobEvents.error.message : ""} retrying={retryJob.isPending} canceling={cancelJob.isPending} onSelectJob={setSelectedJobId} onRefresh={() => void refresh("jobs", "job-events")} onRetry={(id) => retryJob.mutate(id)} onCancel={(id) => cancelJob.mutate(id)} />;
     if (page === "materials") return <MaterialWorkspace materials={materials.data || []} categories={materialCategories.data || []} loadError={[materials.error, materialCategories.error].filter((error): error is Error => error instanceof Error).map((error) => error.message).join("；")} sources={sources.data || []} skills={skills.data || []} strategies={strategies.data || []} curationResult={curationResult} creating={createFromMaterials.isPending} onCreate={(payload) => createFromMaterials.mutate(payload)} onManageSources={() => { setSettingsTab("sources"); setPage("settings"); }} onManageStrategies={() => { setSettingsTab("strategy"); setPage("settings"); }} onCollect={(ids) => collectSources.mutate(ids)} collecting={collectSources.isPending} onCurate={(strategyId) => curateMaterials.mutate(strategyId)} curating={curateMaterials.isPending} onClassify={(ids) => classifyMaterials.mutate(ids)} classifying={classifyMaterials.isPending} onTriage={(id, decision) => triage.mutate({ id, decision })} onAssignCategory={(id, categoryId) => assignMaterialCategory.mutate({ id, categoryId })} onAddCategory={(payload) => addMaterialCategory.mutateAsync(payload)} onUpdateCategory={(id, payload) => updateMaterialCategory.mutateAsync({ id, payload })} onDisableCategory={(id) => disableMaterialCategory.mutateAsync(id)} onRestoreCategory={(id) => restoreMaterialCategory.mutateAsync(id)} />;
     if (page === "topics") return <TopicRadar topics={topics.data || []} strategies={strategies.data || []} algorithms={topicAlgorithms.data || []} scanning={scanTopics.isPending} writing={acceptTopic.isPending} managingAlgorithms={createTopicAlgorithm.isPending || updateTopicAlgorithm.isPending || deleteTopicAlgorithm.isPending} onScan={(strategyId, algorithmId) => scanTopics.mutate({ strategyId, algorithmId })} onWrite={(topic) => acceptTopic.mutate(topic)} onDismiss={(topic) => { void api.decideTopic(topic.id, "reject").then(() => refresh("topics", "materials")).catch((error: Error) => message.error(error.message)); }} onSaveMaterials={(topic) => saveTopicMaterials.mutate(topic)} onCreateAlgorithm={(payload) => createTopicAlgorithm.mutateAsync(payload)} onUpdateAlgorithm={(id, payload) => updateTopicAlgorithm.mutateAsync({ id, payload })} onDeleteAlgorithm={(id) => deleteTopicAlgorithm.mutateAsync(id)} />;
     if (page === "review") return <ReviewQueue articles={articles.data || []} jobs={jobs.data || []} selectedId={selectedArticleId} pending={reviewArticle.isPending} retrying={retryJob.isPending} onSelect={setSelectedArticleId} onApprove={(article) => reviewArticle.mutate({ article, decision: "approve" })} onChanges={(article) => reviewArticle.mutate({ article, decision: "request_changes" })} onEdit={(id) => { setSelectedArticleId(id); setEditorReturnPage("review"); setPage("editor"); }} onRetry={(id) => retryJob.mutate(id)} />;
@@ -994,6 +1025,6 @@ export function FigmaConsole({ currentUser }: { currentUser: User }) {
         )}
       </div>
     );
-  }, [acceptTopic, archiveArticle, articles.data, channels.data, coverPreviewUrl, createDraft, createFromMaterials, dashboard.data, deliveryError, editorReturnPage, jobs.data, materialCategories.data, materialCategories.error, materials.data, materials.error, models.data, page, publishDraft, reviewArticle, saveTopicMaterials, scanTopics, selectedArticleId, selectedChannelId, selectedMaterialId, selectedSkillId, selectedStrategyId, selectedThemeId, settingsTab, skills.data, sources.data, sourceType, strategies.data, themes.data, themePreview.data?.html, thumbMediaId, topicAlgorithms.data, topics.data, triage, updateTopicAlgorithm, users.data, updateSource, uploadThumb, collectSources, curateMaterials, classifyMaterials, assignMaterialCategory, addMaterialCategory, updateMaterialCategory, disableMaterialCategory, restoreMaterialCategory, retryJob]);
+  }, [acceptTopic, archiveArticle, articles.data, cancelJob, channels.data, coverPreviewUrl, createDraft, createFromMaterials, dashboard.data, deliveryError, editorReturnPage, jobEvents.data, jobEvents.error, jobEvents.isLoading, jobs.data, materialCategories.data, materialCategories.error, materials.data, materials.error, models.data, page, publishDraft, refresh, reviewArticle, saveTopicMaterials, scanTopics, selectedArticleId, selectedChannelId, selectedJobId, selectedMaterialId, selectedSkillId, selectedStrategyId, selectedThemeId, settingsTab, skills.data, sources.data, sourceType, strategies.data, themes.data, themePreview.data?.html, thumbMediaId, topicAlgorithms.data, topics.data, triage, updateTopicAlgorithm, users.data, updateSource, uploadThumb, collectSources, curateMaterials, classifyMaterials, assignMaterialCategory, addMaterialCategory, updateMaterialCategory, disableMaterialCategory, restoreMaterialCategory, retryJob]);
   return <div className="figma-console"><FigmaSidebar page={page} onNavigate={setPage} onCreate={() => { setPage("topics"); setTopicOpen(true); }} onHelp={() => message.info("帮助中心：先筛选素材，再确认选题、配置策略并审核发布。")} onLogout={() => { void api.logout().then(() => window.location.reload()).catch((error: Error) => message.error(error.message)); }} /><div className="figma-main"><FigmaTopbar page={page} user={currentUser} notificationCount={(jobs.data || []).filter((item) => item.status.startsWith("failed") || item.status === "waiting_review").length} onSearch={search} onLogout={() => { void api.logout().then(() => window.location.reload()).catch((error: Error) => message.error(error.message)); }} />{content}</div>{(sourceOpen || topicOpen) && <div className="figma-modal-backdrop"><div className="figma-modal"><button className="modal-close" type="button" aria-label="关闭" onClick={() => { setSourceOpen(false); setTopicOpen(false); }}><Icon name="close" size={18} /></button>{sourceOpen ? <><span className="eyebrow">SOURCE</span><h2>{sourceType === "manual" ? "粘贴手动素材" : "添加信息源"}</h2><p>{sourceType === "manual" ? "直接粘贴一条素材，保存后立即进入素材池，无需再等待采集。" : sourceType === "rss" ? "添加一个 RSS 订阅地址，系统会按生产线的频率采集新内容。" : sourceType === "aihot_api" ? "接入 AI HOT 最近 24 小时精选资讯，按官方分类自动入库。" : "添加一个网页或栏目页地址，系统会扫描页面正文并送入待筛选素材。"}</p><form onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); if (sourceType === "manual") { const title = String(form.get("title") || "").trim(); const content = String(form.get("content") || "").trim(); const sourceName = String(form.get("source_name") || "手动录入").trim(); if (!title || !content) { message.error("请填写素材标题和正文。"); return; } addManualMaterial.mutate({ title, content, source_name: sourceName || "手动录入" }); return; } const name = String(form.get("name") || "").trim(); const url = String(form.get("url") || "").trim(); const category = String(form.get("category") || "").trim() || undefined; if (!name || (sourceType !== "aihot_api" && !url)) { message.error(sourceType === "aihot_api" ? "请填写信息源名称。" : "请填写信息源名称和地址。"); return; } addSource.mutate({ name, source_type: sourceType, url, category }); }}><label>类型<select value={sourceType} onChange={(event) => setSourceType(event.target.value as "rss" | "url" | "manual" | "aihot_api")}><option value="rss">RSS 订阅</option><option value="url">网页 URL</option><option value="aihot_api">AI HOT API（24h 精选）</option><option value="manual">手动粘贴素材</option></select></label>{sourceType === "manual" ? <><label>素材标题<input name="title" required placeholder="这条素材讲什么？" /></label><label>素材正文<textarea name="content" required placeholder="粘贴完整正文、摘录或你的想法…" /></label><label>来源标签（可选）<input name="source_name" placeholder="例如：我的观察" /></label></> : sourceType === "aihot_api" ? <><label>信息源名称<input name="name" required placeholder="例如：AI HOT 24h 精选" /></label><label>分类（可选）<select name="category"><option value="">全部分类</option><option value="ai-models">AI 模型</option><option value="ai-products">AI 产品</option><option value="industry">行业动态</option><option value="paper">论文</option><option value="tip">技巧</option></select></label></> : <><label>信息源名称<input name="name" required placeholder={sourceType === "rss" ? "例如：36氪 RSS" : "例如：MIT Technology Review"} /></label><label>{sourceType === "rss" ? "RSS 地址" : "网页地址"}<input name="url" type="url" required placeholder="https://..." /></label></>}<PillButton type="submit" tone="pink">{sourceType === "manual" ? "加入素材池" : "添加信息源"}</PillButton></form></> : <><span className="eyebrow">NEW TOPIC</span><h2>创建候选选题</h2><p>先确认选题，再进入 AI 创作流程。</p><form onSubmit={(event) => { event.preventDefault(); createTopic.mutate(); }}><label>选题标题<input value={topicTitle} onChange={(event) => setTopicTitle(event.target.value)} required placeholder="输入一个值得创作的选题" /></label><label>所属策略<select value={topicStrategyId} onChange={(event) => setTopicStrategyId(event.target.value)} required><option value="">请选择策略</option>{(strategies.data || []).map((strategy) => <option key={strategy.id} value={strategy.id}>{strategy.name}</option>)}</select></label><PillButton type="submit" tone="pink">创建候选选题</PillButton></form></>}</div></div>}{selectedMaterial && null}</div>;
 }

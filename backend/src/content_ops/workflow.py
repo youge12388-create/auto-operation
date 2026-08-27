@@ -35,6 +35,7 @@ from .models import (
     Topic,
 )
 from .providers import CompletionRequest, ModelProvider, provider_for
+from .redaction import redact_error, redact_event_payload
 from .settings import get_settings
 from .strategy_combinations import resolve_strategy_definition
 from .strategy_config import (
@@ -52,9 +53,28 @@ REQUIRED_AI_REVIEW_CHECKS = frozenset(
     {"fact_traceability", "source_quality", "title_alignment", "content_complete"}
 )
 
+_MAX_JOB_ERROR_LENGTH = 2000
+_MAX_EVENT_ERROR_LENGTH = 500
+_REDACTED_ERROR_ATTR = "_content_ops_redacted_error"
+
 
 class JobCanceled(Exception):
     pass
+
+
+def _remember_redacted_error(exc: Exception, error: str) -> None:
+    """Retain a provider-aware rendering while re-raising the original exception."""
+    try:
+        setattr(exc, _REDACTED_ERROR_ATTR, error)
+    except (AttributeError, TypeError):
+        # Some exception implementations do not allow custom attributes. The
+        # generic redactor in _persisted_error still protects those failures.
+        pass
+
+
+def _persisted_error(exc: Exception, *, max_length: int) -> str:
+    remembered = getattr(exc, _REDACTED_ERROR_ATTR, None)
+    return redact_error(remembered if isinstance(remembered, str) else exc, max_length=max_length)
 
 
 def _assert_job_active(db: Session, job: Job) -> None:
@@ -149,13 +169,18 @@ def _job_event(
     status: str | None = None,
     payload: dict[str, Any] | None = None,
 ) -> None:
+    event_payload = dict(payload or {})
+    for key in ("error", "reason"):
+        if key in event_payload:
+            event_payload[key] = redact_error(event_payload[key], max_length=_MAX_EVENT_ERROR_LENGTH)
+    event_payload = redact_event_payload(event_payload)
     db.add(
         JobEvent(
             job_id=job.id,
             event_type=event_type,
             step_name=step_name,
             status=status,
-            payload_json=payload or {},
+            payload_json=event_payload,
         )
     )
 
@@ -198,10 +223,11 @@ def _run_step(db: Session, job: Job, name: str, fn) -> dict[str, Any]:
         raise
     except Exception as exc:
         failed_at = datetime.now(timezone.utc)
+        error = _persisted_error(exc, max_length=_MAX_JOB_ERROR_LENGTH)
         step.status = "failed"
-        step.error = str(exc)
-        job.last_error = str(exc)
-        _job_event(db, job, "step_failed", name, "failed", {"error": str(exc)[:500]})
+        step.error = error
+        job.last_error = error
+        _job_event(db, job, "step_failed", name, "failed", {"error": error})
         job.attempt_count += 1
         job.lease_until = None
         _record_job_duration(job, failed_at)
@@ -271,9 +297,8 @@ def _complete_with_log(
     try:
         response = provider.complete(request)
     except Exception as exc:
-        error = str(exc)
-        if api_key:
-            error = error.replace(api_key, "[redacted]")
+        error = redact_error(exc, secret_values=(api_key,), max_length=_MAX_JOB_ERROR_LENGTH)
+        _remember_redacted_error(exc, error)
         db.add(
             ModelCallLog(
                 job_id=job.id,
@@ -284,7 +309,7 @@ def _complete_with_log(
                 status="failed",
                 duration_ms=int((time.perf_counter() - started) * 1000),
                 input_summary=f"{request.system}\n{request.user}"[:1000],
-                error=error[:2000],
+                error=error,
             )
         )
         db.flush()
@@ -535,13 +560,15 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
         db.commit()
 
         collected: list[str] = []
+        source_failures: dict[str, str] = {}
 
         def collect_for_triage() -> dict[str, Any]:
             source_query = select(Source).where(Source.enabled.is_(True))
             source_ids = strategy_config.get("source_ids", [])
             if source_ids:
                 source_query = source_query.where(Source.id.in_(source_ids))
-            for source in db.scalars(source_query).all():
+            sources = db.scalars(source_query).all()
+            for source in sources:
                 try:
                     for item in collect_source(
                         db,
@@ -553,19 +580,25 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
                 except Exception as exc:
                     # Isolate a failing source so one bad feed cannot fail the
                     # whole scan, mirroring the automation collect step.
+                    source_failures[source.name] = redact_error(exc, max_length=_MAX_EVENT_ERROR_LENGTH)
                     _job_event(
                         db,
                         job,
                         "source_failed",
                         "collect",
                         "failed",
-                        {"source": source.name, "error": str(exc)[:500]},
+                        {"source": source.name, "error": source_failures[source.name]},
                     )
                     try:
                         db.commit()
                     except Exception:
                         db.rollback()
-            return {"item_ids": collected, "material_count": len(collected)}
+            return {
+                "item_ids": collected,
+                "material_count": len(collected),
+                "succeeded_sources": len(sources) - len(source_failures),
+                "failed_sources": source_failures,
+            }
 
         collect_output = _run_step(db, job, "collect", collect_for_triage)
         _run_step(db, job, "normalize", lambda: {"normalized": True})
@@ -635,7 +668,10 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
             raise ValueError(f"阶段 {stage} 关联的模型已停用")
         return model
 
-    stage_models = {stage: configured_model(stage) for stage in ("writing", "style", "rewrite", "review", "render")}
+    stage_models = {
+        stage: configured_model(stage)
+        for stage in ("outline", "writing", "style", "rewrite", "review", "render")
+    }
     article = _article(db, job, snapshot_strategy_version)
     if not article.model_snapshot:
         writing_model = stage_models["writing"]
@@ -648,7 +684,7 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
     if not article.skill_snapshot:
         skill_objects = {
             stage: skill_for_stage_config(db, strategy_config, stage)
-            for stage in ("writing", "style", "rewrite", "review", "render")
+            for stage in ("outline", "writing", "style", "rewrite", "review", "render")
         }
         article.skill_snapshot = {
             "strategy_version": snapshot_strategy_version,
@@ -731,14 +767,14 @@ def run_job(db: Session, job_id: str, provider: ModelProvider) -> Job:
                 ):
                     collected_items.append(item.id)
             except Exception as exc:
-                source_failures[source.name] = str(exc)[:500]
+                source_failures[source.name] = redact_error(exc, max_length=_MAX_EVENT_ERROR_LENGTH)
                 _job_event(
                     db,
                     job,
                     "source_failed",
                     "collect",
                     "failed",
-                    {"source": source.name, "error": str(exc)[:500]},
+                    {"source": source.name, "error": source_failures[source.name]},
                 )
                 try:
                     # Persist the failure event right away: a later source's

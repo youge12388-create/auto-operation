@@ -4,7 +4,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import App from "./ConsoleRoot";
 import "./figma.css";
 import "./login-stitch.css";
-import "./ui-motion.css";
 
 const client = new QueryClient();
 

@@ -16,7 +16,15 @@ def _engine_kwargs(url: str) -> dict:
     return {"pool_pre_ping": True}
 
 
-engine = create_engine(get_settings().database_url, future=True, **_engine_kwargs(get_settings().database_url))
+database_url = get_settings().database_url
+engine = create_engine(database_url, future=True, **_engine_kwargs(database_url))
+# SQLite writes use BEGIN IMMEDIATE below. Long-lived event streams must not
+# share that engine, or a read request would hold the write reservation open.
+read_engine = (
+    create_engine(database_url, future=True, **_engine_kwargs(database_url))
+    if database_url.startswith("sqlite")
+    else engine
+)
 
 
 if get_settings().database_url.startswith("sqlite"):
@@ -34,6 +42,17 @@ if get_settings().database_url.startswith("sqlite"):
         finally:
             cursor.close()
 
+    @event.listens_for(read_engine, "connect")
+    def _configure_sqlite_read(dbapi_connection, _connection_record) -> None:  # type: ignore[no-untyped-def]
+        # The stream reader is intentionally not registered for BEGIN IMMEDIATE.
+        # Keep SQLite in autocommit mode so a SELECT never reserves the writer.
+        dbapi_connection.isolation_level = None
+        cursor = dbapi_connection.cursor()
+        try:
+            cursor.execute("PRAGMA busy_timeout=30000")
+        finally:
+            cursor.close()
+
     @event.listens_for(engine, "begin")
     def _begin_immediate(dbapi_connection) -> None:  # type: ignore[no-untyped-def]
         # SQLite's default deferred transactions upgrade from a read lock to a
@@ -47,6 +66,7 @@ if get_settings().database_url.startswith("sqlite"):
 
 
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+ReadSessionLocal = sessionmaker(bind=read_engine, autoflush=False, expire_on_commit=False)
 
 
 def get_db() -> Generator[Session, None, None]:

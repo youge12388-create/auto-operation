@@ -48,6 +48,42 @@ def test_curate_materials_moves_selected_items_into_retained_pool(db):
     assert selected[0]["id"] == item.id
     assert item.triage_status == "selected"
 
+
+def test_curate_materials_uses_the_production_token_budget(db):
+    class CapturingProvider:
+        request = None
+
+        def complete(self, request):
+            self.request = request
+            return CompletionResponse(
+                text='{"materials":[{"id":"material","decision":"select","score":80,"reason":"useful"}]}'
+            )
+
+    source = Source(name="budget source", source_type="manual", url="")
+    strategy = Strategy(name="budget strategy", objective="Keep enough context")
+    model = ModelConfig(provider="fake", name="budget model", enabled=True)
+    db.add_all([source, strategy, model])
+    db.flush()
+    item = SourceItem(
+        id="material",
+        source_id=source.id,
+        title="Longer context item",
+        url="",
+        canonical_url="manual://budget-item",
+        content="verified material",
+        content_hash="c" * 64,
+        status="verified",
+        triage_status="inbox",
+    )
+    db.add(item)
+    db.flush()
+
+    provider = CapturingProvider()
+    curate_materials(db, None, strategy, [item], provider, model)
+
+    assert provider.request is not None
+    assert provider.request.max_tokens == 6000
+
 def test_curate_materials_falls_back_when_ai_output_is_invalid(db):
     class InvalidCurationProvider:
         def complete(self, _):
