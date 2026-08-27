@@ -1,4 +1,5 @@
 from collections.abc import Generator
+from pathlib import Path
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
@@ -16,7 +17,18 @@ def _engine_kwargs(url: str) -> dict:
     return {"pool_pre_ping": True}
 
 
+def _ensure_sqlite_parent(url: str) -> None:
+    """Create the SQLite file's directory so a fresh checkout can boot."""
+    if not url.startswith("sqlite:///"):
+        return
+    raw_path = url[len("sqlite:///") :]
+    if raw_path in ("", ":memory:"):
+        return
+    Path(raw_path).parent.mkdir(parents=True, exist_ok=True)
+
+
 database_url = get_settings().database_url
+_ensure_sqlite_parent(database_url)
 engine = create_engine(database_url, future=True, **_engine_kwargs(database_url))
 # SQLite writes use BEGIN IMMEDIATE below. Long-lived event streams must not
 # share that engine, or a read request would hold the write reservation open.
