@@ -2,13 +2,24 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { api, type StrategyConfig } from "../src/api";
 import { isReviewFailureStatus } from "../src/ContentFlowPages";
-import { dailyTime, mergeCombinationConfig, sanitizeCombinationConfig, scheduleMode, validatedSchedule } from "../src/StrategyPipelinePage";
+import { dailyTime, mergeCombinationConfig, publishedSkillsForStage, sanitizeCombinationConfig, scheduleMode, validatedSchedule } from "../src/StrategyPipelinePage";
 
 afterEach(() => {
   vi.unstubAllGlobals();
 });
 
 describe("strategy combination contracts", () => {
+  it("only exposes published Skills for their matching stage", () => {
+    const skills = [
+      { id: "rewrite-live", name: "Rewrite", version: "1.0.0", status: "published", skill_type: "rewrite" },
+      { id: "rewrite-draft", name: "Draft rewrite", version: "1.0.0", status: "draft", skill_type: "rewrite" },
+      { id: "review-live", name: "Review", version: "1.0.0", status: "published", skill_type: "review" },
+    ] as Parameters<typeof publishedSkillsForStage>[0];
+
+    expect(publishedSkillsForStage(skills, "rewrite").map((item) => item.id)).toEqual(["rewrite-live"]);
+    expect(publishedSkillsForStage(skills, "review").map((item) => item.id)).toEqual(["review-live"]);
+  });
+
   it("keeps inherited stage mappings while applying a combination override", () => {
     const base: StrategyConfig = {
       model_by_stage: { style: "style-model" },

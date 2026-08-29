@@ -49,6 +49,8 @@ const TEXT = {
   outlineModel: "\u5927\u7eb2\u6a21\u578b",
   writingSkill: "\u5199\u4f5c Skill",
   writingModel: "\u5199\u4f5c\u6a21\u578b",
+  rewriteSkill: "\u6539\u5199 Skill",
+  reviewSkill: "\u5ba1\u6838 Skill",
   theme: "\u6392\u7248\u6a21\u677f",
   review: "\u4eba\u5de5\u5ba1\u6838\u95e8",
   on: "\u5f00\u542f",
@@ -110,6 +112,7 @@ type Props = {
   onManageMaterials: () => void;
   onUploadThumb: (file: File, channelId: string) => Promise<string>;
   onImportSkill: (file: File) => Promise<void>;
+  onPublishSkill: (id: string) => Promise<void>;
   importingSkill: boolean;
 };
 
@@ -131,6 +134,10 @@ function id(): string {
 function preferredThemeId(themes: Theme[]): string | undefined {
   return themes.find((item) => item.enabled && item.slug === "editorial-notes")?.id
     ?? themes.find((item) => item.enabled)?.id;
+}
+
+export function publishedSkillsForStage(skills: Skill[], stage: string): Skill[] {
+  return skills.filter((item) => item.status === "published" && item.skill_type === stage);
 }
 
 function defaultCombination(categories: MaterialCategory[], skills: Skill[], models: Model[], themes: Theme[], _channels: ChannelAccount[]): StrategyCombination {
@@ -238,6 +245,7 @@ export function StrategyPipelinePage(props: Props) {
   const [activeCombinationId, setActiveCombinationId] = useState(draft.combinations[0]?.id ?? "");
   const [busy, setBusy] = useState<"save" | "auto" | "current" | null>(null);
   const [error, setError] = useState("");
+  const [publishingSkillId, setPublishingSkillId] = useState<string | null>(null);
   const skillFileRef = useRef<HTMLInputElement | null>(null);
   const thumbFileRef = useRef<HTMLInputElement | null>(null);
   const [thumbUploading, setThumbUploading] = useState(false);
@@ -250,8 +258,10 @@ export function StrategyPipelinePage(props: Props) {
   }, [current?.id, current?.version, props.selectedId]);
 
   const active = draft.combinations.find((item) => item.id === activeCombinationId) ?? draft.combinations[0];
-  const enabledSkills = props.skills.filter((item) => item.status === "published");
-  const enabledOutlineSkills = enabledSkills.filter((item) => item.skill_type === "outline");
+  const enabledOutlineSkills = publishedSkillsForStage(props.skills, "outline");
+  const enabledWritingSkills = publishedSkillsForStage(props.skills, "writing");
+  const enabledRewriteSkills = publishedSkillsForStage(props.skills, "rewrite");
+  const enabledReviewSkills = publishedSkillsForStage(props.skills, "review");
   const enabledModels = props.models.filter((item) => item.enabled);
   const enabledThemes = props.themes.filter((item) => item.enabled);
   const enabledChannels = props.channels.filter((item) => item.enabled);
@@ -265,6 +275,15 @@ export function StrategyPipelinePage(props: Props) {
 
   const updateActive = (update: (item: StrategyCombination) => StrategyCombination) => {
     setDraft((value) => ({ ...value, combinations: value.combinations.map((item) => item.id === active.id ? update(item) : item) }));
+  };
+
+  const updateStageSkill = (stage: string, value: string, clearLegacySkillIds = false) => {
+    updateActive((item) => {
+      const skillByStage = { ...(item.config.skill_by_stage ?? {}) };
+      if (value) skillByStage[stage] = value;
+      else delete skillByStage[stage];
+      return { ...item, config: { ...item.config, ...(clearLegacySkillIds ? { skill_ids: [] } : {}), skill_by_stage: skillByStage } };
+    });
   };
 
   const addCombination = () => {
@@ -371,6 +390,18 @@ export function StrategyPipelinePage(props: Props) {
     }
   };
 
+  const publishSkill = async (skillId: string) => {
+    setError("");
+    setPublishingSkillId(skillId);
+    try {
+      await props.onPublishSkill(skillId);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "发布 Skill 失败，请稍后重试。");
+    } finally {
+      setPublishingSkillId(null);
+    }
+  };
+
   return <main className="figma-page pipeline-page">
     <div className="figma-page-heading strategy-heading">
       <div><h1><span className="title-icon"><Icon name="settings" size={22} /></span>{TEXT.title}</h1><p>{TEXT.subtitle}</p></div>
@@ -378,6 +409,13 @@ export function StrategyPipelinePage(props: Props) {
       <button className="strategy-source-link" type="button" disabled={props.importingSkill} onClick={() => skillFileRef.current?.click()}>{props.importingSkill ? "导入中…" : "导入 Skill（ZIP）"}</button>
       <input ref={skillFileRef} type="file" accept=".zip,application/zip" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void props.onImportSkill(file); event.target.value = ""; }} />
     </div>
+    <section className="pipeline-skill-library" aria-label="Skill 管理">
+      <div className="pipeline-skill-library-head"><div><h2>Skill 管理</h2><p>导入后先发布，再绑定到对应的流程阶段。</p></div><span>{props.skills.length} 个</span></div>
+      {props.skills.length ? <div className="pipeline-skill-list">{props.skills.map((skill) => <div className="pipeline-skill-item" key={skill.id}>
+        <div><strong>{skill.name}</strong><small>{skill.skill_type} · v{skill.version}</small></div>
+        <div className="pipeline-skill-actions"><em className={skill.status === "published" ? "is-published" : ""}>{skill.status === "published" ? "已发布" : "草稿"}</em>{skill.status !== "published" && <button type="button" disabled={publishingSkillId !== null} onClick={() => void publishSkill(skill.id)}>{publishingSkillId === skill.id ? "发布中…" : "发布"}</button>}</div>
+      </div>)}</div> : <p className="pipeline-skill-empty">尚未导入 Skill。导入 ZIP 后会在这里完成发布。</p>}
+    </section>
     <section className="pipeline-layout">
       <aside className="pipeline-list-panel">
         <div className="strategy-list-head"><h2>{TEXT.pipelines}<small> ({props.strategies.length})</small></h2><button className="figma-link-button" type="button" onClick={props.onNew}>+ {TEXT.newPipeline}</button></div>
@@ -417,30 +455,22 @@ export function StrategyPipelinePage(props: Props) {
             </div>
             <div className="combination-fields">
               <label><small>{TEXT.materialPool}</small><CategorySelector categories={props.categories} value={active.config.material_category_ids ?? []} onChange={(categoryIds) => updateActive((item) => ({ ...item, config: { ...item.config, material_category_ids: categoryIds } }))} /><span>{TEXT.allCategories}</span></label>
-              <label><small>{TEXT.outlineSkill}</small><select value={(active.config.skill_by_stage ?? {}).outline ?? ""} onChange={(event) => updateActive((item) => {
-                const skillByStage = { ...(item.config.skill_by_stage ?? {}) };
-                if (event.target.value) skillByStage.outline = event.target.value;
-                else delete skillByStage.outline;
-                return { ...item, config: { ...item.config, skill_by_stage: skillByStage } };
-              })}><option value="">静态大纲（不调用模型）</option>{enabledOutlineSkills.map((item) => <option key={item.id} value={item.id}>{item.name}{" · v"}{item.version}</option>)}</select></label>
+              <label><small>{TEXT.outlineSkill}</small><select value={(active.config.skill_by_stage ?? {}).outline ?? ""} onChange={(event) => updateStageSkill("outline", event.target.value)}><option value="">静态大纲（不调用模型）</option>{enabledOutlineSkills.map((item) => <option key={item.id} value={item.id}>{item.name}{" · v"}{item.version}</option>)}</select></label>
               <label><small>{TEXT.outlineModel}</small><select value={(active.config.model_by_stage ?? {}).outline ?? ""} disabled={!(active.config.skill_by_stage ?? {}).outline} onChange={(event) => updateActive((item) => {
                 const modelByStage = { ...(item.config.model_by_stage ?? {}) };
                 if (event.target.value) modelByStage.outline = event.target.value;
                 else delete modelByStage.outline;
                 return { ...item, config: { ...item.config, model_by_stage: modelByStage } };
               })}><option value="">{TEXT.systemDefault}</option>{enabledModels.map((item) => <option key={item.id} value={item.id}>{item.provider} / {item.name}</option>)}</select></label>
-              <label><small>{TEXT.writingSkill}</small><select value={(active.config.skill_by_stage ?? {}).writing ?? active.config.skill_ids?.[0] ?? ""} onChange={(event) => updateActive((item) => {
-                const skillByStage = { ...(item.config.skill_by_stage ?? {}) };
-                if (event.target.value) skillByStage.writing = event.target.value;
-                else delete skillByStage.writing;
-                return { ...item, config: { ...item.config, skill_ids: [], skill_by_stage: skillByStage } };
-              })}><option value="">通用写作（不套用 Skill）</option>{enabledSkills.map((item) => <option key={item.id} value={item.id}>{item.name}{" \u00b7 v"}{item.version}</option>)}</select></label>
+              <label><small>{TEXT.writingSkill}</small><select value={(active.config.skill_by_stage ?? {}).writing ?? active.config.skill_ids?.[0] ?? ""} onChange={(event) => updateStageSkill("writing", event.target.value, true)}><option value="">通用写作（不套用 Skill）</option>{enabledWritingSkills.map((item) => <option key={item.id} value={item.id}>{item.name}{" \u00b7 v"}{item.version}</option>)}</select></label>
               <label><small>{TEXT.writingModel}</small><select value={(active.config.model_by_stage ?? {}).writing ?? ""} onChange={(event) => updateActive((item) => {
                 const modelByStage = { ...(item.config.model_by_stage ?? {}) };
                 if (event.target.value) modelByStage.writing = event.target.value;
                 else delete modelByStage.writing;
                 return { ...item, config: { ...item.config, model_by_stage: modelByStage } };
               })}><option value="">{TEXT.systemDefault}</option>{enabledModels.map((item) => <option key={item.id} value={item.id}>{item.provider} / {item.name}</option>)}</select></label>
+              <label><small>{TEXT.rewriteSkill}</small><select value={(active.config.skill_by_stage ?? {}).rewrite ?? ""} onChange={(event) => updateStageSkill("rewrite", event.target.value)}><option value="">不执行改写</option>{enabledRewriteSkills.map((item) => <option key={item.id} value={item.id}>{item.name}{" · v"}{item.version}</option>)}</select><span>写作完成后执行。</span></label>
+              <label><small>{TEXT.reviewSkill}</small><select value={(active.config.skill_by_stage ?? {}).review ?? ""} onChange={(event) => updateStageSkill("review", event.target.value)}><option value="">不执行审核</option>{enabledReviewSkills.map((item) => <option key={item.id} value={item.id}>{item.name}{" · v"}{item.version}</option>)}</select><span>交付前执行。</span></label>
               <label className="combination-review"><small>{TEXT.translation}</small><button type="button" className={active.config.translate_foreign_sources !== false ? "is-on" : ""} onClick={() => updateActive((item) => ({ ...item, config: { ...item.config, translate_foreign_sources: item.config.translate_foreign_sources === false } }))}>{active.config.translate_foreign_sources !== false ? TEXT.on : TEXT.off}</button><span>{TEXT.translationHelp}</span></label><label><small>排版选择</small><select value={active.config.theme_selection_mode ?? "manual"} onChange={(event) => updateActive((item) => ({ ...item, config: { ...item.config, theme_selection_mode: event.target.value as "auto" | "manual" } }))}><option value="auto">按文章结构自动推荐</option><option value="manual">手动指定主题</option></select><span>{(active.config.theme_selection_mode ?? "manual") === "auto" ? "根据大纲和正文在观点长文、案例复盘、方法清单中推荐；规则固定、不会随机换皮。" : "固定使用下方选择的主题。"}</span></label>
               <label><small>{TEXT.theme}</small><select disabled={(active.config.theme_selection_mode ?? "manual") === "auto"} value={active.config.theme_id ?? ""} onChange={(event) => updateActive((item) => ({ ...item, config: { ...item.config, theme_id: event.target.value || undefined } }))}><option value="">{TEXT.disabled}</option>{enabledThemes.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select><span>{(active.config.theme_selection_mode ?? "manual") === "auto" ? "切换到手动指定后可选择主题。" : "此选择会覆盖自动推荐。"}</span></label>
               <label className="combination-review"><small>{TEXT.review}</small><button type="button" disabled={active.config.delivery_mode === "auto_publish"} className={(active.config.review_rules?.human_review_required ?? false) ? "is-on" : ""} onClick={() => updateActive((item) => ({ ...item, config: { ...item.config, review_rules: { ...(item.config.review_rules ?? {}), human_review_required: !(item.config.review_rules?.human_review_required ?? false) } } }))}>{(active.config.review_rules?.human_review_required ?? false) ? TEXT.on : TEXT.off}</button><span>{active.config.delivery_mode === "auto_publish" ? "AI 审核须通过 75 分且联网事实核验完整；否则进入人工审核" : "默认关闭；开启后文章必须由你通过后才能交付"}</span></label>
