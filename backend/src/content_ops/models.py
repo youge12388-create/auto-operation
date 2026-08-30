@@ -27,6 +27,7 @@ class User(TimestampMixin, Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
     password_hash: Mapped[str] = mapped_column(String(255))
+    session_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     role: Mapped[str] = mapped_column(String(32), default="operator")
     is_active: Mapped[bool] = mapped_column(default=True)
 

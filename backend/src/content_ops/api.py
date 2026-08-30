@@ -98,6 +98,7 @@ from .schemas import (
     ModelRead,
     ModelTestRead,
     ModelUpdate,
+    PasswordChangeRequest,
     PublicationRead,
     ReviewCreate,
     ReviewRead,
@@ -522,7 +523,7 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
         raise HTTPException(status_code=401, detail="邮箱或密码错误")
     response.set_cookie(
         key=SESSION_COOKIE,
-        value=make_session(user.id),
+        value=make_session(user.id, user.session_version),
         httponly=True,
         secure=get_settings().cookie_secure,
         samesite="lax",
@@ -534,6 +535,28 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
 
 @app.post("/api/v1/auth/logout")
 def logout(response: Response) -> dict[str, bool]:
+    response.delete_cookie(SESSION_COOKIE)
+    return {"ok": True}
+
+
+@app.post("/api/v1/auth/password")
+def change_password(
+    payload: PasswordChangeRequest,
+    response: Response,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict[str, bool]:
+    if payload.new_password != payload.confirm_password:
+        raise HTTPException(status_code=400, detail="两次输入的新密码不一致")
+    if not verify_password(payload.current_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="当前密码不正确")
+    if verify_password(payload.new_password, user.password_hash):
+        raise HTTPException(status_code=400, detail="新密码不能与当前密码相同")
+
+    user.password_hash = hash_password(payload.new_password)
+    user.session_version += 1
+    add_audit(db, user, "user.password.change", "user", user.id, {})
+    db.commit()
     response.delete_cookie(SESSION_COOKIE)
     return {"ok": True}
 

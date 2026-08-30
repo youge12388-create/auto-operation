@@ -366,6 +366,8 @@ export const api = {
     request<User>("/api/v1/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }),
   me: () => request<User>("/api/v1/auth/me"),
   logout: () => request<{ ok: boolean }>("/api/v1/auth/logout", { method: "POST" }),
+  changePassword: (payload: { current_password: string; new_password: string; confirm_password: string }) =>
+    request<{ ok: boolean }>("/api/v1/auth/password", { method: "POST", body: JSON.stringify(payload) }),
   dashboard: () => request<Dashboard>("/api/v1/dashboard"),
   users: () => request<User[]>("/api/v1/users"),
   addUser: (payload: { email: string; password: string; role: string }) =>
@@ -516,4 +518,3 @@ if (!response.ok) {
   reviewArticle: (articleId: string, revisionId: string, decision: "approve" | "reject" | "request_changes", comment = "") =>
     request<Review>(`/api/v1/articles/${articleId}/revisions/${revisionId}/review`, { method: "POST", body: JSON.stringify({ decision, comment }) }),
 };
-

@@ -127,6 +127,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 }
 .figma-topbar-popover button:hover { color: var(--figma-primary-hover); }
 .figma-profile-popover span { display: block; margin: 6px 0 12px; color: var(--figma-muted); font-size: 12px; }
+.figma-profile-popover button + button { margin-left: 14px; }
 
 .figma-page { padding: 30px 32px 52px; max-width: 1240px; margin: 0 auto; }
 .figma-page-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 26px; }
@@ -891,6 +892,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 }
 .modal-close:hover { background: var(--figma-red-soft); color: var(--figma-red); }
 .modal-form-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 18px; }
+.modal-form-actions .figma-pill { width: auto; }
+.password-change-modal { width: min(440px, 100%); }
+.password-change-note { display: flex; align-items: flex-start; gap: 7px; }
+.password-change-note .ui-icon { flex: 0 0 auto; margin-top: 2px; color: var(--figma-primary); }
 .material-preview-modal { width: min(760px, 100%); max-height: min(84vh, 760px); display: flex; flex-direction: column; padding: 25px; }
 .material-preview-modal h2 { padding-right: 35px; line-height: 1.4; }
 .material-preview-meta { display: flex; align-items: center; gap: 10px; color: var(--figma-faint); font-size: 11px; }

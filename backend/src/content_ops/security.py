@@ -32,16 +32,20 @@ def _serializer() -> URLSafeTimedSerializer:
     return URLSafeTimedSerializer(get_settings().app_secret, salt="content-ops-session")
 
 
-def make_session(user_id: str) -> str:
-    return _serializer().dumps({"user_id": user_id})
+def make_session(user_id: str, session_version: int) -> str:
+    return _serializer().dumps({"user_id": user_id, "session_version": session_version})
 
 
-def read_session(value: str) -> str | None:
+def read_session(value: str) -> tuple[str, int] | None:
     try:
         payload = _serializer().loads(value, max_age=60 * 60 * 24)
-    except BadSignature:
+        user_id = str(payload["user_id"])
+        # Cookies created before session revocation was introduced have no
+        # version. They remain valid only while the user's version is still 1.
+        session_version = int(payload.get("session_version", 1))
+    except (BadSignature, KeyError, TypeError, ValueError):
         return None
-    return str(payload["user_id"])
+    return user_id, session_version
 
 
 def _fernet() -> Fernet:
@@ -65,9 +69,9 @@ def decrypt_secret(value: str | None) -> str | None:
 
 
 def current_user_from_session(session_cookie: str | None, db: Session) -> User:
-    user_id = read_session(session_cookie) if session_cookie else None
-    user = db.get(User, user_id) if user_id else None
-    if not user or not user.is_active:
+    session = read_session(session_cookie) if session_cookie else None
+    user = db.get(User, session[0]) if session else None
+    if not user or not user.is_active or not session or user.session_version != session[1]:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="登录已失效")
     return user
 
