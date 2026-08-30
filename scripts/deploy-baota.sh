@@ -67,7 +67,7 @@ PIP_DISABLE_PIP_VERSION_CHECK=1 "$pip_bin" install --no-input "$staging_dir/back
 # additive session-revocation field idempotently before switching services.
 (
   cd "$staging_dir/backend"
-  "$python_bin" -m content_ops.schema_maintenance
+  PYTHONPATH="$staging_dir/backend/src" "$python_bin" -m content_ops.schema_maintenance
 )
 
 systemctl stop "$worker_service" "$api_service"
