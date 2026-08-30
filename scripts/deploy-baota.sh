@@ -13,7 +13,7 @@ staging_dir="$project_dir/.release-$deploy_sha"
 api_service="content-ops-api.service"
 worker_service="content-ops-worker.service"
 pip_bin="$project_dir/venv/bin/pip"
-alembic_bin="$project_dir/venv/bin/alembic"
+python_bin="$project_dir/venv/bin/python"
 
 rollback_needed=0
 
@@ -32,7 +32,7 @@ trap cleanup EXIT
 
 [[ -f "$archive_path" ]] || { echo "release archive not found: $archive_path" >&2; exit 1; }
 [[ -x "$pip_bin" ]] || { echo "production virtualenv not found: $pip_bin" >&2; exit 1; }
-[[ -x "$alembic_bin" ]] || { echo "production virtualenv is missing Alembic: $alembic_bin" >&2; exit 1; }
+[[ -x "$python_bin" ]] || { echo "production virtualenv is missing Python: $python_bin" >&2; exit 1; }
 [[ -d "$release_dir/backend" ]] || { echo "current release is missing: $release_dir/backend" >&2; exit 1; }
 
 rm -rf "$staging_dir"
@@ -56,11 +56,12 @@ fi
 # after the release directory is swapped.
 PIP_DISABLE_PIP_VERSION_CHECK=1 "$pip_bin" install --no-input "$staging_dir/backend"
 
-# Apply the release's schema before the running services are stopped. This
-# makes additive migrations fail safely while the previous release remains up.
+# The production SQLite database predates Alembic's version table, so a full
+# `alembic upgrade head` would replay historical DDL. Apply this release's
+# additive session-revocation field idempotently before switching services.
 (
   cd "$staging_dir/backend"
-  "$alembic_bin" upgrade head
+  "$python_bin" -m content_ops.schema_maintenance
 )
 
 systemctl stop "$worker_service" "$api_service"
