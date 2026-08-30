@@ -30,6 +30,12 @@ cleanup() {
 }
 trap cleanup EXIT
 
+report_health_failure() {
+  echo "new release health diagnostics:" >&2
+  systemctl --no-pager --full status "$api_service" "$worker_service" || true
+  journalctl --no-pager -n 80 -u "$api_service" -u "$worker_service" || true
+}
+
 [[ -f "$archive_path" ]] || { echo "release archive not found: $archive_path" >&2; exit 1; }
 [[ -x "$pip_bin" ]] || { echo "production virtualenv not found: $pip_bin" >&2; exit 1; }
 [[ -x "$python_bin" ]] || { echo "production virtualenv is missing Python: $python_bin" >&2; exit 1; }
@@ -85,4 +91,5 @@ for _ in $(seq 1 30); do
 done
 
 echo "new release failed health check; rolling back" >&2
+report_health_failure
 exit 1
